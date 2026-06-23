@@ -1,92 +1,84 @@
 # Pingo
 
-A lightweight desktop utility that monitors terminal-based AI coding agents
-(Claude Code, Codex, OpenCode, Aider, Gemini CLI, …) and alerts you the moment
-an agent **finishes a task**, **needs approval**, **hits an error**, **hits a
-rate limit**, or **needs authentication** — with native notifications and
-sounds. Agent-agnostic, fully local, no OCR, no cloud.
+Monitor AI coding agents (Claude Code, OpenCode, Aider, Gemini CLI, Codex, …)
+and get notified when they finish, need approval, hit errors, or need
+authentication — with native OS notifications and sounds. Fully local, no OCR,
+no cloud, agent-agnostic.
 
-```
-┌──────────────┐   stdout/stderr   ┌──────────────┐   ws://127.0.0.1:4001   ┌──────────────┐
-│  AI agent    │ ────────────────▶ │ pingo CLI │ ─────────────────────▶ │ Desktop app  │
-│ (claude…)    │ ◀──────────────── │  (wrapper)    │     events / rules      │ (Tauri+React)│
-└──────────────┘   stdin (TTY)     └──────────────┘                         └──────────────┘
-                                                                              notify + sound + log
+## Quick start
+
+```bash
+npm install -g pingo
 ```
 
-## Project layout
+Then run any agent through Pingo:
 
-| Path        | What it is                                                            |
-| ----------- | --------------------------------------------------------------------- |
-| `cli/`      | Node + TypeScript process wrapper (`pingo <command>`)             |
-| `desktop/`  | Tauri (Rust) + React + Zustand + Tailwind v4 dashboard, tray, SQLite  |
+```bash
+pingo claude        # monitor Claude Code
+pingo opencode      # monitor OpenCode
+pingo aider         # monitor Aider
+pingo gemini        # monitor Gemini CLI
+```
 
-## How it works
-
-1. The **CLI wrapper** launches your agent, streams its output to the terminal
-   untouched, and analyzes every line in real time against the detection rules.
-2. Matched events are streamed to the **desktop app** over a localhost
-   WebSocket (port `4001`). The app loads its rules from SQLite and serves them
-   to the wrapper, so editing a rule in the UI changes detection immediately.
-3. The app persists events/rules/preferences in SQLite, raises a **native OS
-   notification**, plays the **category-specific sound**, updates the **system
-   tray** state (🟢 active · 🟡 waiting · 🔴 error · 🔔 attention) and logs it
-   to the dashboard.
-
-If the desktop app isn't running, the wrapper still runs your agent normally
-using built-in fallback rules — it just can't deliver notifications.
-
-## Running it
+You'll hear notification sounds and see alerts in your terminal. For rich
+dashboard, tray icon, and event history, also run the **desktop app**.
 
 ### Desktop app
 
-```bash
-cd desktop
-npm install
-npm run tauri dev      # dev with hot reload
-# or: npm run tauri build   # produce an installer
+Download the latest installer from the
+[Releases](https://github.com/anomalyco/AgentBell/releases) page (Windows .exe
+/ macOS .dmg / Linux .AppImage). Launch it and it auto-connects to your CLI
+wrapper.
+
+> No git clone, no npm link, no build step needed.
+
+## Commands
+
+| Command | Description |
+| ------- | ----------- |
+| `pingo <agent>` | Launch and monitor an AI agent |
+| `pingo setup` | Configure notification mode (voice, sound, both, none) |
+| `pingo doctor` | Diagnose your setup — CLI version, audio, desktop connectivity |
+| `pingo test` | Send a test notification to verify your config |
+| `pingo --version` | Show installed version |
+
+## Notification modes
+
+```
+pingo setup
 ```
 
-### CLI wrapper
+- **sound** — plays system notification sounds (default)
+- **voice** — speaks alerts via text-to-speech
+- **both** — sound + voice
+- **none** — silent (terminal output only)
 
-```bash
-cd cli
-npm install
-npm run build          # compiles to dist/
-npm link               # makes `pingo` available on your PATH
+Without the desktop app, Pingo uses your system sounds and TTS. With the
+desktop app running, notifications are richer (custom sounds, tray icon, event
+history).
+
+## Rules
+
+Pingo monitors agent output for these events:
+
+| Event | Example triggers |
+| ----- | ---------------- |
+| Permission Required | "waiting for approval", "press Enter to continue" |
+| Task Completed | "completed", "all changes applied" |
+| Authentication | "login required", "token expired" |
+| Error | "error", "fatal", "exception" |
+| Rate Limit | "rate limit", "quota exceeded", "429" |
+
+Rules are fully customizable. With the desktop app, edit them in the Rules tab.
+
+## Architecture
+
+```
+Agent → pingo CLI → terminal (passthrough)
+                 → desktop app (WebSocket) → notification + sound + log
 ```
 
-Then, with the desktop app running:
-
-```bash
-pingo claude
-pingo codex
-pingo opencode
-pingo aider
-pingo gemini
-```
-
-## Default rules
-
-| Rule                 | Category         | Priority | Sample patterns                             |
-| -------------------- | ---------------- | -------- | ------------------------------------------- |
-| Permission Required  | `permission`     | high     | `waiting for approval`, `press enter…`      |
-| Task Completed       | `success`        | medium   | `completed`, `all changes applied`          |
-| Authentication Issue | `authentication` | high     | `login required`, `token expired`           |
-| Error                | `error`          | high     | `error`, `fatal`, `exception`               |
-| Rate Limit           | `ratelimit`      | high     | `rate limit`, `quota exceeded`, `429`       |
-
-Rules are seeded into SQLite on first launch and fully editable from the
-**Rules** tab (enable/disable, edit patterns, add new).
-
-## Sounds
-
-Default WAV alerts live in `desktop/public/sounds/` and are generated by
-`desktop/generate-sounds.cjs`. Each category can be muted globally or overridden
-with a custom audio file from the **Settings** tab (persisted in SQLite).
-
-## Notes / scope
-
-In scope for MVP v1: local detection, notifications, sounds, tray, history,
-rules. **Out of scope** (by design): OCR, mobile, Slack/Telegram, cloud sync,
-accounts, remote approvals, AI analysis.
+The CLI wrapper launches your agent, streams its output to the terminal
+untouched, and analyzes every line against detection rules. If the desktop app
+is running, events are sent over a local WebSocket; otherwise, Pingo handles
+notifications itself using your system's sound and voice capabilities.

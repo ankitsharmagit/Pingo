@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { Bell, LayoutDashboard, SlidersHorizontal, Settings as SettingsIcon } from "lucide-react";
 import { useStore, isPaused } from "./store/useStore";
 import { EventLog, SessionStatus } from "./lib/types";
@@ -8,6 +9,8 @@ import ActiveSessions from "./components/ActiveSessions";
 import RecentEvents from "./components/RecentEvents";
 import RulesManager from "./components/RulesManager";
 import Settings from "./components/Settings";
+import ConnectionStatus from "./components/ConnectionStatus";
+import Onboarding from "./components/Onboarding";
 
 type Tab = "dashboard" | "rules" | "settings";
 
@@ -20,6 +23,27 @@ const NAV: { id: Tab; label: string; icon: typeof Bell }[] = [
 function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [, setTick] = useState(0);
+  const [cliVersion, setCliVersion] = useState<string | null>(null);
+  const [cliChecking, setCliChecking] = useState(true);
+  const [onboarded, setOnboarded] = useState(() => {
+    return localStorage.getItem("pingo_onboarded") === "true";
+  });
+
+  useEffect(() => {
+    invoke<string | null>("check_cli")
+      .then((result) => {
+        if (result) setCliVersion(result);
+      })
+      .catch(() => {})
+      .finally(() => setCliChecking(false));
+  }, []);
+
+  const dismissOnboarding = () => {
+    setOnboarded(true);
+    localStorage.setItem("pingo_onboarded", "true");
+  };
+
+  const showOnboarding = !cliChecking && !cliVersion && !onboarded;
 
   const loadInitial = useStore((s) => s.loadInitial);
   const addEvent = useStore((s) => s.addEvent);
@@ -89,6 +113,9 @@ function App() {
   const attention = sessions.some((s) => s.status === "waiting" || s.status === "error");
 
   return (
+    <>
+      {showOnboarding && <Onboarding onDismiss={dismissOnboarding} />}
+
     <div className="h-full flex text-white">
       {/* Sidebar */}
       <aside className="w-56 shrink-0 flex flex-col gap-2 p-4 border-r border-white/5">
@@ -157,6 +184,7 @@ function App() {
         <div className="flex-1 min-h-0 overflow-y-auto p-6">
           {tab === "dashboard" && (
             <div className="flex flex-col gap-4 h-full">
+              <ConnectionStatus cliVersion={cliVersion} />
               <ActiveSessions />
               <div className="flex-1 min-h-0">
                 <RecentEvents />
@@ -168,6 +196,7 @@ function App() {
         </div>
       </main>
     </div>
+    </>
   );
 }
 

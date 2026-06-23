@@ -21,10 +21,14 @@ export default function ActiveSessions() {
 
       {sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-white/40">
-          <Cpu size={28} className="mb-2 opacity-50" />
-          <p className="text-sm">No active agents.</p>
-          <p className="text-xs mt-1 text-white/30">
-            Run <code className="px-1.5 py-0.5 rounded bg-white/10">pingo claude</code> in a terminal.
+          <Cpu size={32} className="mb-3 opacity-50" />
+          <p className="text-sm font-medium text-white/50">No active agents</p>
+          <p className="text-xs mt-1 text-white/30 max-w-xs text-center leading-relaxed">
+            Open a terminal and run{" "}
+            <code className="px-1.5 py-0.5 rounded bg-white/10 font-mono">pingo claude</code>,{" "}
+            <code className="px-1.5 py-0.5 rounded bg-white/10 font-mono">pingo opencode</code>, or{" "}
+            <code className="px-1.5 py-0.5 rounded bg-white/10 font-mono">pingo aider</code>{" "}
+            to start monitoring an agent.
           </p>
         </div>
       ) : (

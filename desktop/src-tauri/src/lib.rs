@@ -74,6 +74,20 @@ fn save_pref(db_state: tauri::State<DbState>, key: String, value: String) -> Res
 }
 
 #[tauri::command]
+fn check_cli() -> Result<Option<String>, String> {
+    let output = std::process::Command::new("pingo")
+        .args(["--version"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if output.status.success() {
+        let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(Some(version))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
 fn set_tray_status(app_handle: tauri::AppHandle, status: String) -> Result<(), String> {
     // status: "active" | "waiting" | "error" | "attention"
     ws_server::update_tray_icon(&app_handle, &status);
@@ -201,7 +215,8 @@ pub fn run() {
             get_prefs,
             save_pref,
             set_tray_status,
-            test_sound
+            test_sound,
+            check_cli
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -10,7 +10,9 @@
 // events to the desktop app over a localhost WebSocket.
 
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
+import { exec } from "child_process";
 import * as pty from "@lydell/node-pty";
 import WebSocket from "ws";
 import { Detector, DEFAULT_RULES, Rule, DetectionResult } from "./detector";
@@ -75,7 +77,7 @@ function buildSpawn(command: string, args: string[]): { file: string; args: stri
 
 class AppLink {
   private ws: WebSocket | null = null;
-  private connected = false;
+  connected = false;
   private closing = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private onRules: (rules: Rule[]) => void;
@@ -175,15 +177,176 @@ function makeAnalyzer(
   };
 }
 
+// ── Config ──────────────────────────────────────────────────────────────
+const PKG = JSON.parse(fs.readFileSync(path.join(__dirname, "../package.json"), "utf8")) as { version: string };
+
+interface PingoConfig {
+  notify: "voice" | "sound" | "both" | "none";
+}
+
+function configPath(): string {
+  const dir = process.env.APPDATA
+    ? path.join(process.env.APPDATA, "pingo")
+    : path.join(os.homedir(), ".config", "pingo");
+  return path.join(dir, "config.json");
+}
+
+function loadConfig(): PingoConfig {
+  try {
+    const raw = fs.readFileSync(configPath(), "utf8");
+    return JSON.parse(raw) as PingoConfig;
+  } catch {
+    return { notify: "voice" };
+  }
+}
+
+function saveConfig(cfg: PingoConfig): void {
+  const p = configPath();
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+}
+
+function setupWizard(): void {
+  const rl = require("readline").createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  process.stdout.write(
+    [
+      "",
+      "╔══════════════════════════════════════╗",
+      "║       Pingo — Notification Setup     ║",
+      "╚══════════════════════════════════════╝",
+      "",
+      "How would you like to be notified when your agent needs attention?",
+      "",
+      "  1) Voice  — speaks the event aloud (e.g. \"Permission required\")",
+      "  2) Sound  — plays a WAV notification sound",
+      "  3) Both   — voice + sound together",
+      "  4) None   — no audio notifications (desktop app only)",
+      "",
+      "(or press Enter to keep current)",
+      "",
+      "Enter 1, 2, 3, or 4: ",
+    ].join("\n")
+  );
+  rl.on("line", (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) { rl.close(); return; }
+    const map: Record<string, "voice" | "sound" | "both" | "none"> = {
+      "1": "voice", "2": "sound", "3": "both", "4": "none",
+    };
+    const choice = map[trimmed];
+    if (choice) {
+      saveConfig({ notify: choice });
+      const label = choice === "both" ? "voice and sound" : choice === "none" ? "no audio" : choice;
+      process.stdout.write(`\nSaved! You'll get ${label} notifications. Restart your agent to apply settings.\n`);
+      rl.close();
+    } else {
+      process.stdout.write("Please enter 1, 2, or 3: ");
+    }
+  });
+}
+
+// ── Doctor ──────────────────────────────────────────────────────────────
+async function cmdDoctor(): Promise<void> {
+  const ok: string[] = [];
+  const fail: string[] = [];
+
+  // CLI version
+  ok.push(`CLI installed  (v${PKG.version})`);
+
+  // Config
+  const cfg = loadConfig();
+  ok.push(`Notifications  (${cfg.notify})`);
+
+  // Desktop WebSocket
+  try {
+    const ws = new WebSocket(WS_URL);
+    await new Promise<void>((resolve, reject) => {
+      ws.onopen = () => { ws.close(); resolve(); };
+      ws.onerror = () => reject(new Error("connection refused"));
+      setTimeout(() => reject(new Error("timeout")), 3000);
+    });
+    ok.push("Desktop app    connected");
+  } catch {
+    fail.push("Desktop app    not reachable  (run desktop app or use CLI standalone)");
+  }
+
+  // Audio
+  try {
+    await new Promise<void>((resolve, reject) => {
+      exec(
+        `powershell -NoProfile -c "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('test'); [Console]::Beep(800,100)"`,
+        (err) => { err ? reject(err) : resolve(); }
+      );
+    });
+    ok.push("Audio          working");
+  } catch {
+    fail.push("Audio          not available");
+  }
+
+  process.stdout.write("\n  Pingo Doctor\n  ============\n\n");
+  for (const m of ok) process.stdout.write(`  ✓ ${m}\n`);
+  for (const m of fail) process.stdout.write(`  ✗ ${m}\n`);
+  process.stdout.write("\n");
+  process.exit(fail.length > 0 ? 1 : 0);
+}
+
+// ── Test ─────────────────────────────────────────────────────────────────
+function cmdTest(): void {
+  const cfg = loadConfig();
+  process.stdout.write("  Sending test notification…\n");
+
+  if (cfg.notify === "voice" || cfg.notify === "both") {
+    exec(
+      `powershell -NoProfile -c "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('Pingo test notification')"`,
+    );
+  }
+  if (cfg.notify === "sound" || cfg.notify === "both") {
+    exec(
+      `powershell -NoProfile -c "(New-Object Media.SoundPlayer '$env:WINDIR\\media\\Windows Notify.wav').PlaySync()"`,
+    );
+  }
+  if (cfg.notify === "none") {
+    process.stdout.write("  (notifications disabled — run `pingo setup` to enable)\n");
+  }
+  process.stdout.write("  Done.\n");
+}
+
 function main(): void {
   const argv = process.argv.slice(2);
+
+  if (argv[0] === "setup") {
+    setupWizard();
+    return;
+  }
+
+  if (argv[0] === "doctor") {
+    cmdDoctor();
+    return;
+  }
+
+  if (argv[0] === "test") {
+    cmdTest();
+    return;
+  }
+
+  if (argv[0] === "--version" || argv[0] === "-v") {
+    process.stdout.write(`${PKG.version}\n`);
+    return;
+  }
+
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
     process.stdout.write(
       [
         "Pingo — get notified when your coding agent needs attention.",
         "",
         "Usage:",
-        "  pingo <command> [...args]",
+        "  pingo <command> [...args]    monitor a coding agent",
+        "  pingo setup                 configure notifications (voice / sound / both / none)",
+        "  pingo doctor                diagnose installation",
+        "  pingo test                  send a test notification",
         "",
         "Examples:",
         "  pingo claude",
@@ -194,6 +357,12 @@ function main(): void {
         "",
       ].join("\n")
     );
+    // First-run: prompt setup if no config exists.
+    try {
+      fs.accessSync(configPath());
+    } catch {
+      process.stdout.write("\nFirst run detected! Run `pingo setup` to choose your notification style.\n");
+    }
     process.exit(argv.length === 0 ? 1 : 0);
   }
 
@@ -241,12 +410,89 @@ function main(): void {
     },
   });
 
+  // ── Notification: voice (TTS) ──────────────────────────────────────────
+  const MAX_QUEUE = 16;
+  const voiceQueue: string[] = [];
+  let voiceBusy = false;
+  function speakQueued(): void {
+    if (voiceBusy || voiceQueue.length === 0) return;
+    voiceBusy = true;
+    const phrase = voiceQueue.shift()!;
+    exec(
+      `powershell -NoProfile -c "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('${phrase}')"`,
+      () => { voiceBusy = false; speakQueued(); }
+    );
+  }
+  function speakPhrase(category: string): void {
+    const map: Record<string, string> = {
+      permission: "Permission required",
+      success: "Task completed",
+      error: "Agent error",
+      authentication: "Authentication required",
+      ratelimit: "Rate limit reached",
+      input: "Waiting for input",
+    };
+    if (voiceQueue.length >= MAX_QUEUE) voiceQueue.shift();
+    voiceQueue.push(map[category] ?? "Notification");
+    speakQueued();
+  }
+
+  // ── Notification: WAV sound ────────────────────────────────────────────
+  const soundQueue: string[] = [];
+  let soundBusy = false;
+  function playQueued(): void {
+    if (soundBusy || soundQueue.length === 0) return;
+    soundBusy = true;
+    const wav = soundQueue.shift()!;
+    exec(
+      `powershell -NoProfile -c "(New-Object Media.SoundPlayer '${wav}').PlaySync()"`,
+      () => { soundBusy = false; playQueued(); }
+    );
+  }
+  function playSound(category: string): void {
+    const map: Record<string, string> = {
+      permission: "Windows Exclamation.wav",
+      success: "Windows Notify.wav",
+      error: "Windows Critical Stop.wav",
+      authentication: "Windows Exclamation.wav",
+      ratelimit: "Windows Critical Stop.wav",
+      input: "Windows Foreground.wav",
+    };
+    if (soundQueue.length >= MAX_QUEUE) soundQueue.shift();
+    soundQueue.push(`${process.env.WINDIR}\\media\\${map[category] ?? "Windows Notify.wav"}`);
+    playQueued();
+  }
+
+  // ── Notification: dispatch based on config ─────────────────────────────
+  const notifCfg = loadConfig();
+  function notify(category: string): void {
+    if (notifCfg.notify === "none") return;
+    if (notifCfg.notify === "voice" || notifCfg.notify === "both") speakPhrase(category);
+    if (notifCfg.notify === "sound" || notifCfg.notify === "both") playSound(category);
+  }
+
   const lastFired: Record<string, number> = {};
+  let repeatTimer: NodeJS.Timeout | null = null;
+  function clearRepeat(): void {
+    if (repeatTimer) { clearInterval(repeatTimer); repeatTimer = null; }
+  }
   function emit(result: DetectionResult): void {
     const now = Date.now();
     const last = lastFired[result.category] ?? 0;
     if (now - last < DEBOUNCE_MS) return;
     lastFired[result.category] = now;
+
+    if (!link.connected) {
+      notify(result.category);
+      // Repeat permission/authentication every 5s until user responds.
+      if ((result.category === "permission" || result.category === "authentication") && !repeatTimer) {
+        repeatTimer = setInterval(() => notify(result.category), 5000);
+      }
+      // Non-blocking categories cancel the repeat.
+      if (result.category !== "permission" && result.category !== "authentication") {
+        clearRepeat();
+      }
+    }
 
     link.send({
       type: "status",
@@ -293,6 +539,7 @@ function main(): void {
   }
   stdin.resume();
   const onStdin = (data: Buffer) => {
+    clearRepeat();
     try {
       child.write(data.toString("utf8"));
     } catch {
@@ -328,6 +575,7 @@ function main(): void {
   });
 
   child.onExit(({ exitCode }) => {
+    clearRepeat();
     link.send({
       type: "status",
       data: {
