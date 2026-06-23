@@ -26,7 +26,7 @@ pingo --version
 ### Desktop app (optional)
 
 Download the latest installer from the
-[Releases](https://github.com/anomalyco/AgentBell/releases) page:
+[Releases](https://github.com/ankitsharmagit/Pingo/releases) page:
 
 | Platform | Installer |
 | -------- | --------- |
@@ -36,7 +36,8 @@ Download the latest installer from the
 
 Launch the app — it auto-connects to your CLI wrapper. No configuration needed.
 
-> No git clone, no npm link, no build step required.
+> The CLI installs in one command (`npm install -g pingo`). The desktop app
+> installers are built automatically via CI on every tagged release.
 
 ## Usage
 
