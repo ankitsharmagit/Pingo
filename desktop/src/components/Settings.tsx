@@ -1,8 +1,8 @@
 import { useRef } from "react";
 import { Volume2, VolumeX, Play, Upload, RotateCcw, Pause, PlayCircle } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { useStore, isPaused, isMuted } from "../store/useStore";
 import { PREF_KEYS } from "../lib/types";
-import { playSound } from "../lib/notify";
 import { CATEGORY_COLOR } from "../lib/ui";
 
 const SOUND_ROWS: { category: string; label: string; prefKey: string }[] = [
@@ -34,7 +34,7 @@ function SoundRow({ category, label, prefKey }: { category: string; label: strin
       <span className="text-sm flex-1">{label}</span>
       <span className="text-xs text-white/40">{hasCustom ? "custom" : "default"}</span>
       <button
-        onClick={() => playSound(category, prefs)}
+        onClick={() => invoke("test_sound", { category })}
         className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/5"
         title="Test sound"
       >

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Bell, LayoutDashboard, SlidersHorizontal, Settings as SettingsIcon } from "lucide-react";
-import { useStore, isPaused, isMuted } from "./store/useStore";
+import { useStore, isPaused } from "./store/useStore";
 import { EventLog, SessionStatus } from "./lib/types";
 import { ensureNotificationPermission, notify } from "./lib/notify";
 import ActiveSessions from "./components/ActiveSessions";
@@ -46,8 +46,9 @@ function App() {
     unlisten.push(
       listen<EventLog>("event-detected", (e) => {
         addEvent(e.payload);
-        const curPrefs = useStore.getState().prefs;
-        notify(e.payload, curPrefs, isMuted(curPrefs));
+        // The native backend plays the alert sound; here we only raise the
+        // OS notification.
+        notify(e.payload);
       })
     );
 

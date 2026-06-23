@@ -112,6 +112,28 @@ async fn handle_connection(stream: TcpStream, app_handle: AppHandle) -> Result<(
                             // Emit event to React frontend
                             app_handle.emit("event-detected", &event).ok();
 
+                            // Play the alert sound natively. Done in Rust (not the
+                            // WebView) so it is immune to browser autoplay/gesture
+                            // policies and works while the window is hidden in the tray.
+                            let muted = {
+                                let db_state = app_handle.state::<DbState>();
+                                let conn = db_state.conn.lock().unwrap();
+                                db::get_preference(&conn, "mute_sounds")
+                                    .unwrap_or(None)
+                                    .map(|v| v == "true")
+                                    .unwrap_or(false)
+                            };
+                            if !muted {
+                                let custom = crate::sound_pref_key(&event_type).and_then(|key| {
+                                    let db_state = app_handle.state::<DbState>();
+                                    let conn = db_state.conn.lock().unwrap();
+                                    db::get_preference(&conn, key)
+                                        .unwrap_or(None)
+                                        .filter(|s| !s.is_empty())
+                                });
+                                crate::audio::play(&event_type, custom);
+                            }
+
                             // Update system tray status icon based on event
                             let tray_status = match event_type.as_str() {
                                 "permission" => "attention",

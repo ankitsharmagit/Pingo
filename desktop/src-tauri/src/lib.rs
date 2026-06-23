@@ -1,3 +1,4 @@
+mod audio;
 mod db;
 mod ws_server;
 
@@ -75,6 +76,31 @@ fn save_pref(db_state: tauri::State<DbState>, key: String, value: String) -> Res
 fn set_tray_status(app_handle: tauri::AppHandle, status: String) -> Result<(), String> {
     // status: "active" | "waiting" | "error" | "attention"
     ws_server::update_tray_icon(&app_handle, &status);
+    Ok(())
+}
+
+// Returns the preferences key holding the custom sound for a category, if any.
+pub fn sound_pref_key(category: &str) -> Option<&'static str> {
+    match category {
+        "permission" => Some("sound_permission"),
+        "success" => Some("sound_success"),
+        "error" => Some("sound_error"),
+        "authentication" => Some("sound_authentication"),
+        "ratelimit" => Some("sound_error"),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+fn test_sound(db_state: tauri::State<DbState>, category: String) -> Result<(), String> {
+    // Explicit user test: always plays (ignores the global mute toggle).
+    let custom = sound_pref_key(&category).and_then(|key| {
+        let conn = db_state.conn.lock().unwrap();
+        db::get_preference(&conn, key)
+            .unwrap_or(None)
+            .filter(|s| !s.is_empty())
+    });
+    audio::play(&category, custom);
     Ok(())
 }
 
@@ -172,7 +198,8 @@ pub fn run() {
             clear_events,
             get_prefs,
             save_pref,
-            set_tray_status
+            set_tray_status,
+            test_sound
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
