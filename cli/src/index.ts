@@ -81,9 +81,11 @@ class AppLink {
   private closing = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private onRules: (rules: Rule[]) => void;
+  private onIgnorePatterns: (patterns: string[]) => void;
 
-  constructor(onRules: (rules: Rule[]) => void) {
+  constructor(onRules: (rules: Rule[]) => void, onIgnorePatterns: (patterns: string[]) => void) {
     this.onRules = onRules;
+    this.onIgnorePatterns = onIgnorePatterns;
   }
 
   connect(): void {
@@ -103,8 +105,13 @@ class AppLink {
     this.ws.on("message", (raw: WebSocket.RawData) => {
       try {
         const msg = JSON.parse(raw.toString());
-        if (msg.type === "rules" && Array.isArray(msg.data)) {
-          this.onRules(msg.data as Rule[]);
+        if (msg.type === "rules") {
+          if (Array.isArray(msg.data)) {
+            this.onRules(msg.data as Rule[]);
+          }
+          if (Array.isArray(msg.ignore_patterns)) {
+            this.onIgnorePatterns(msg.ignore_patterns);
+          }
         }
       } catch {
         /* ignore malformed frames */
@@ -314,6 +321,133 @@ function cmdTest(): void {
   process.stdout.write("  Done.\n");
 }
 
+// ── Known agents ─────────────────────────────────────────────────────────
+const KNOWN_AGENTS: { name: string; desc: string }[] = [
+  { name: "claude", desc: "Claude Code" },
+  { name: "opencode", desc: "OpenCode" },
+  { name: "codex", desc: "Codex CLI" },
+  { name: "gemini", desc: "Gemini CLI" },
+  { name: "aider", desc: "Aider" },
+  { name: "cursor", desc: "Cursor" },
+];
+
+function findOnPath(name: string): boolean {
+  if (process.platform !== "win32") {
+    const dirs = (process.env.PATH || "").split(":").filter(Boolean);
+    for (const dir of dirs) {
+      const full = path.join(dir, name);
+      try { if (fs.statSync(full).isFile()) return true; } catch {}
+    }
+    return false;
+  }
+  const exts = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";").map((e) => e.trim()).filter(Boolean);
+  const hasExt = exts.some((e) => name.toLowerCase().endsWith(e.toLowerCase()));
+  const candidates = hasExt ? [name] : [...exts.map((e) => name + e), name];
+  const dirs = (process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    for (const cand of candidates) {
+      const full = path.join(dir, cand);
+      try { if (fs.statSync(full).isFile()) return true; } catch {}
+    }
+  }
+  return false;
+}
+
+function cmdDiscover(): void {
+  process.stdout.write("\n  Scanning PATH for known agents…\n\n");
+  let found = 0;
+  for (const agent of KNOWN_AGENTS) {
+    const installed = findOnPath(agent.name);
+    if (installed) found++;
+    process.stdout.write(
+      `  ${installed ? "✓" : " "}  ${agent.name.padEnd(12)} ${agent.desc}\n`
+    );
+  }
+  process.stdout.write(`\n  ${found} of ${KNOWN_AGENTS.length} agents found.\n\n`);
+  if (found > 0) {
+    process.stdout.write("  Run any detected agent:\n\n");
+    for (const agent of KNOWN_AGENTS) {
+      if (findOnPath(agent.name)) {
+        process.stdout.write(`    pingo ${agent.name.padEnd(12)} ${agent.desc}\n`);
+      }
+    }
+    process.stdout.write("\n");
+  }
+}
+
+function cmdInit(): void {
+  process.stdout.write(
+    [
+      "",
+      "╔══════════════════════════════════════╗",
+      "║       Pingo — First-Time Setup      ║",
+      "╚══════════════════════════════════════╝",
+      "",
+    ].join("\n")
+  );
+
+  // Discover agents
+  const detected: { name: string; desc: string }[] = [];
+  process.stdout.write("  Scanning for installed agents…\n\n");
+  for (const agent of KNOWN_AGENTS) {
+    const installed = findOnPath(agent.name);
+    if (installed) detected.push(agent);
+    process.stdout.write(`  ${installed ? "✓" : " "}  ${agent.name.padEnd(12)} ${agent.desc}\n`);
+  }
+
+  process.stdout.write(`\n  ${detected.length} agent(s) detected.\n\n`);
+
+  if (detected.length > 0) {
+    process.stdout.write("  Ready to start. Run:\n\n");
+    for (const agent of detected) {
+      process.stdout.write(`    pingo ${agent.name.padEnd(12)} ${agent.desc}\n`);
+    }
+    process.stdout.write("\n");
+  } else {
+    process.stdout.write(
+      "  No coding agents found on your PATH.\n" +
+      "  Install one first, or run any command with:\n" +
+      "    pingo <your-command>\n\n"
+    );
+  }
+
+  // Run the notification setup wizard
+  const rl = require("readline").createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  process.stdout.write("  ── Notification Setup ──\n\n");
+  process.stdout.write(
+    "  How would you like to be notified?\n\n" +
+    "    1) Voice  — speaks events aloud\n" +
+    "    2) Sound  — plays notification sounds (default)\n" +
+    "    3) Both   — voice + sound\n" +
+    "    4) None   — silent\n\n" +
+    "  Enter 1-4 (or press Enter for defaults): "
+  );
+  rl.on("line", (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      saveConfig({ notify: "sound" });
+      process.stdout.write("\n  Saved! Using sound notifications.\n");
+      rl.close();
+      return;
+    }
+    const map: Record<string, "voice" | "sound" | "both" | "none"> = {
+      "1": "voice", "2": "sound", "3": "both", "4": "none",
+    };
+    const choice = map[trimmed];
+    if (choice) {
+      saveConfig({ notify: choice });
+      const label = choice === "both" ? "voice and sound" : choice === "none" ? "no audio" : choice;
+      process.stdout.write(`\n  Saved! You'll get ${label} notifications.\n`);
+      rl.close();
+    } else {
+      process.stdout.write("  Please enter 1, 2, 3, or 4: ");
+    }
+  });
+}
+
 function main(): void {
   const argv = process.argv.slice(2);
 
@@ -332,6 +466,16 @@ function main(): void {
     return;
   }
 
+  if (argv[0] === "discover") {
+    cmdDiscover();
+    return;
+  }
+
+  if (argv[0] === "init") {
+    cmdInit();
+    return;
+  }
+
   if (argv[0] === "--version" || argv[0] === "-v") {
     process.stdout.write(`${PKG.version}\n`);
     return;
@@ -347,6 +491,8 @@ function main(): void {
         "  pingo setup                 configure notifications (voice / sound / both / none)",
         "  pingo doctor                diagnose installation",
         "  pingo test                  send a test notification",
+        "  pingo discover              scan PATH for known coding agents",
+        "  pingo init                  first-time setup wizard (discover + configure)",
         "",
         "Examples:",
         "  pingo claude",
@@ -361,7 +507,7 @@ function main(): void {
     try {
       fs.accessSync(configPath());
     } catch {
-      process.stdout.write("\nFirst run detected! Run `pingo setup` to choose your notification style.\n");
+      process.stdout.write("\nFirst run detected! Run `pingo init` for guided setup.\n");
     }
     process.exit(argv.length === 0 ? 1 : 0);
   }
@@ -372,9 +518,13 @@ function main(): void {
   const startTime = new Date().toISOString();
 
   const detector = new Detector();
+  detector.setAgentName(agent.toLowerCase());
   detector.setRules(DEFAULT_RULES);
 
-  const link = new AppLink((rules) => detector.setRules(rules));
+  const link = new AppLink(
+    (rules) => detector.setRules(rules),
+    (patterns) => detector.setIgnorePatterns(patterns)
+  );
   link.connect();
 
   const { file, args } = buildSpawn(command, commandArgs);

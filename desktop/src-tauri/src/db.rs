@@ -11,6 +11,8 @@ pub struct Rule {
     pub priority: String, // "high" | "medium" | "low"
     pub enabled: bool,
     pub patterns: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agents: Option<Vec<String>>, // if set, only applies to these agents
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +40,22 @@ pub fn init_db(db_path: &Path) -> Result<Connection> {
         )",
         [],
     )?;
+
+    // Migration: add agents column if missing (v2 schema)
+    let has_agents: bool = conn
+        .prepare("PRAGMA table_info(rules)")
+        .and_then(|mut stmt| {
+            let cols: Vec<String> = stmt
+                .query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .filter_map(|r| r.ok())
+                .collect();
+            Ok(cols.contains(&"agents".to_string()))
+        })
+        .unwrap_or(false);
+    if !has_agents {
+        conn.execute("ALTER TABLE rules ADD COLUMN agents TEXT DEFAULT NULL", [])?;
+    }
 
     // Create events table
     conn.execute(
@@ -93,6 +111,7 @@ fn seed_default_rules(conn: &Connection) -> Result<()> {
                 "press enter to continue".to_string(),
                 "waiting for approval".to_string(),
             ],
+            agents: None,
         },
         Rule {
             id: Uuid::new_v4().to_string(),
@@ -108,6 +127,7 @@ fn seed_default_rules(conn: &Connection) -> Result<()> {
                 "task complete".to_string(),
                 "all changes applied".to_string(),
             ],
+            agents: None,
         },
         Rule {
             id: Uuid::new_v4().to_string(),
@@ -122,6 +142,7 @@ fn seed_default_rules(conn: &Connection) -> Result<()> {
                 "invalid api key".to_string(),
                 "unauthorized".to_string(),
             ],
+            agents: None,
         },
         Rule {
             id: Uuid::new_v4().to_string(),
@@ -136,6 +157,7 @@ fn seed_default_rules(conn: &Connection) -> Result<()> {
                 "failed".to_string(),
                 "exception".to_string(),
             ],
+            agents: None,
         },
         Rule {
             id: Uuid::new_v4().to_string(),
@@ -156,6 +178,7 @@ fn seed_default_rules(conn: &Connection) -> Result<()> {
                 "i need more information".to_string(),
                 "please clarify".to_string(),
             ],
+            agents: None,
         },
         Rule {
             id: Uuid::new_v4().to_string(),
@@ -169,20 +192,23 @@ fn seed_default_rules(conn: &Connection) -> Result<()> {
                 "too many requests".to_string(),
                 "429".to_string(),
             ],
+            agents: None,
         },
     ];
 
     for rule in default_rules {
         let patterns_json = serde_json::to_string(&rule.patterns).unwrap_or_else(|_| "[]".to_string());
+        let agents_json: Option<String> = None;
         conn.execute(
-            "INSERT INTO rules (id, name, category, priority, enabled, patterns) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO rules (id, name, category, priority, enabled, patterns, agents) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 rule.id,
                 rule.name,
                 rule.category,
                 rule.priority,
                 if rule.enabled { 1 } else { 0 },
-                patterns_json
+                patterns_json,
+                agents_json,
             ],
         )?;
     }
@@ -191,10 +217,14 @@ fn seed_default_rules(conn: &Connection) -> Result<()> {
 }
 
 pub fn get_all_rules(conn: &Connection) -> Result<Vec<Rule>> {
-    let mut stmt = conn.prepare("SELECT id, name, category, priority, enabled, patterns FROM rules")?;
+    let mut stmt = conn.prepare("SELECT id, name, category, priority, enabled, patterns, agents FROM rules")?;
     let rule_iter = stmt.query_map([], |row| {
         let patterns_str: String = row.get(5)?;
         let patterns: Vec<String> = serde_json::from_str(&patterns_str).unwrap_or_default();
+        let agents_str: Option<String> = row.get(6).ok().flatten();
+        let agents: Option<Vec<String>> = agents_str
+            .filter(|s| !s.is_empty())
+            .and_then(|s| serde_json::from_str(&s).ok());
         Ok(Rule {
             id: row.get(0)?,
             name: row.get(1)?,
@@ -202,6 +232,7 @@ pub fn get_all_rules(conn: &Connection) -> Result<Vec<Rule>> {
             priority: row.get(3)?,
             enabled: row.get::<_, i32>(4)? != 0,
             patterns,
+            agents,
         })
     })?;
 
@@ -214,22 +245,27 @@ pub fn get_all_rules(conn: &Connection) -> Result<Vec<Rule>> {
 
 pub fn save_rule(conn: &Connection, rule: &Rule) -> Result<()> {
     let patterns_json = serde_json::to_string(&rule.patterns).unwrap_or_else(|_| "[]".to_string());
+    let agents_json: Option<String> = rule.agents.as_ref().and_then(|a| {
+        if a.is_empty() { None } else { serde_json::to_string(a).ok() }
+    });
     conn.execute(
-        "INSERT INTO rules (id, name, category, priority, enabled, patterns)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        "INSERT INTO rules (id, name, category, priority, enabled, patterns, agents)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
          ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             category = excluded.category,
             priority = excluded.priority,
             enabled = excluded.enabled,
-            patterns = excluded.patterns",
+            patterns = excluded.patterns,
+            agents = excluded.agents",
         params![
             rule.id,
             rule.name,
             rule.category,
             rule.priority,
             if rule.enabled { 1 } else { 0 },
-            patterns_json
+            patterns_json,
+            agents_json,
         ],
     )?;
     Ok(())

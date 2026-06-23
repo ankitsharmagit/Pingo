@@ -88,14 +88,21 @@ async fn handle_connection(stream: TcpStream, app_handle: AppHandle) -> Result<(
             if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(text) {
                 match client_msg {
                     ClientMessage::GetRules => {
-                        let rules = {
+                        let (rules, ignore_patterns) = {
                             let db_state = app_handle.state::<DbState>();
                             let conn = db_state.conn.lock().unwrap();
-                            db::get_all_rules(&conn).unwrap_or_default()
+                            let rules = db::get_all_rules(&conn).unwrap_or_default();
+                            let ignore_patterns: Vec<String> = db::get_preference(&conn, "ignore_patterns")
+                                .ok()
+                                .flatten()
+                                .and_then(|s| serde_json::from_str(&s).ok())
+                                .unwrap_or_default();
+                            (rules, ignore_patterns)
                         };
                         let response = json!({
                             "type": "rules",
-                            "data": rules
+                            "data": rules,
+                            "ignore_patterns": ignore_patterns,
                         });
                         ws_sender.send(Message::Text(response.to_string().into())).await.ok();
                     }

@@ -13,7 +13,17 @@ export interface Rule {
   priority: string; // "high" | "medium" | "low"
   enabled: boolean;
   patterns: string[];
+  agents?: string[]; // if set, only applies to these agents (empty = all)
 }
+
+export const KNOWN_AGENTS = [
+  "claude",
+  "opencode",
+  "codex",
+  "gemini",
+  "aider",
+  "cursor",
+];
 
 export interface EventLog {
   id: string;

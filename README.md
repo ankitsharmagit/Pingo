@@ -107,6 +107,8 @@ You should hear a sound or voice notification. Run `pingo doctor` at any time to
 | Command | What it does |
 |---------|-------------|
 | `pingo <agent>` | Launch and monitor an AI agent |
+| `pingo init` | First-time setup wizard (scans PATH + configures notifications) |
+| `pingo discover` | Scan PATH for installed coding agents |
 | `pingo setup` | Choose notification mode (voice, sound, both, none) |
 | `pingo doctor` | Check your installation and audio |
 | `pingo test` | Send a test notification |

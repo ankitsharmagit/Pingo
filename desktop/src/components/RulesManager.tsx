@@ -1,11 +1,20 @@
 import { useState } from "react";
 import { Plus, Pencil, Trash2, X, Check } from "lucide-react";
 import { useStore } from "../store/useStore";
-import { Rule } from "../lib/types";
+import { Rule, KNOWN_AGENTS } from "../lib/types";
 import { PRIORITY_COLOR } from "../lib/ui";
 
 const CATEGORIES = ["permission", "success", "error", "authentication", "ratelimit", "input"];
 const PRIORITIES = ["high", "medium", "low"];
+
+const AGENT_BADGE_COLORS: Record<string, string> = {
+  claude: "#7c6cff",
+  opencode: "#5ad19a",
+  codex: "#ffb347",
+  gemini: "#4fc3f7",
+  aider: "#ff5d73",
+  cursor: "#ff8fab",
+};
 
 function emptyRule(): Rule {
   return {
@@ -87,6 +96,39 @@ function RuleEditor({
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-xs text-white/50 mb-1">Apply to agents (empty = all agents)</label>
+          <div className="flex flex-wrap gap-1.5">
+            {KNOWN_AGENTS.map((agent) => {
+              const selected = draft.agents?.includes(agent) ?? false;
+              return (
+                <button
+                  key={agent}
+                  onClick={() => {
+                    const current = draft.agents ?? [];
+                    setDraft({
+                      ...draft,
+                      agents: selected
+                        ? current.filter((a) => a !== agent)
+                        : [...current, agent],
+                    });
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium capitalize transition-colors"
+                  style={{
+                    background: selected ? `${AGENT_BADGE_COLORS[agent] ?? "#888"}33` : "rgba(255,255,255,0.06)",
+                    color: selected ? AGENT_BADGE_COLORS[agent] ?? "#fff" : "rgba(255,255,255,0.5)",
+                    border: selected
+                      ? `1px solid ${AGENT_BADGE_COLORS[agent] ?? "#888"}44`
+                      : "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  {agent}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -173,6 +215,9 @@ export default function RulesManager() {
                   {r.priority}
                 </span>
                 <span className="text-[10px] uppercase text-white/40">{r.category}</span>
+                {(r.agents?.length ?? 0) > 0 && (
+                  <span className="text-[10px] text-white/30">· {r.agents!.join(", ")}</span>
+                )}
               </div>
               <p className="text-xs text-white/40 truncate mt-0.5">
                 {r.patterns.length} pattern{r.patterns.length === 1 ? "" : "s"}: {r.patterns.join(", ")}

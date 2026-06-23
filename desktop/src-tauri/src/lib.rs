@@ -108,6 +108,33 @@ pub fn sound_pref_key(category: &str) -> Option<&'static str> {
 }
 
 #[tauri::command]
+fn add_ignore_pattern(db_state: tauri::State<DbState>, pattern: String) -> Result<(), String> {
+    let conn = db_state.conn.lock().unwrap();
+    let mut existing: Vec<String> = db::get_preference(&conn, "ignore_patterns")
+        .ok()
+        .flatten()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    if !existing.contains(&pattern) {
+        existing.push(pattern);
+        let json = serde_json::to_string(&existing).unwrap_or_else(|_| "[]".to_string());
+        db::set_preference(&conn, "ignore_patterns", &json).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_ignore_patterns(db_state: tauri::State<DbState>) -> Result<Vec<String>, String> {
+    let conn = db_state.conn.lock().unwrap();
+    let val = db::get_preference(&conn, "ignore_patterns")
+        .ok()
+        .flatten()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    Ok(val)
+}
+
+#[tauri::command]
 fn test_sound(db_state: tauri::State<DbState>, category: String) -> Result<(), String> {
     // Explicit user test: always plays (ignores the global mute toggle).
     let custom = sound_pref_key(&category).and_then(|key| {
@@ -216,7 +243,9 @@ pub fn run() {
             save_pref,
             set_tray_status,
             test_sound,
-            check_cli
+            check_cli,
+            add_ignore_pattern,
+            get_ignore_patterns
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

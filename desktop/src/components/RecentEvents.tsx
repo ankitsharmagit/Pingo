@@ -1,7 +1,59 @@
-import { Bell, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Bell, Trash2, Ban } from "lucide-react";
 import { useStore } from "../store/useStore";
 import { CATEGORY_COLOR, CATEGORY_TINT, formatTime } from "../lib/ui";
-import { CATEGORY_LABELS } from "../lib/types";
+import { CATEGORY_LABELS, EventLog } from "../lib/types";
+
+function EventRow({ event: e }: { event: EventLog }) {
+  const [ignoring, setIgnoring] = useState(false);
+
+  const ignorePattern = async () => {
+    setIgnoring(true);
+    try {
+      await invoke("add_ignore_pattern", { pattern: e.message });
+    } catch {}
+  };
+
+  return (
+    <div
+      className="flex items-start gap-3 rounded-xl px-3 py-2.5 border border-white/5 hover:border-white/10 transition-colors group"
+      style={{ background: CATEGORY_TINT[e.event_type] ?? "rgba(255,255,255,0.03)" }}
+    >
+      <span
+        className="mt-1 w-2 h-2 rounded-full shrink-0"
+        style={{ background: CATEGORY_COLOR[e.event_type] ?? "#888" }}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span
+            className="text-xs font-semibold"
+            style={{ color: CATEGORY_COLOR[e.event_type] ?? "#ccc" }}
+          >
+            {CATEGORY_LABELS[e.event_type] ?? e.event_type}
+          </span>
+          <span className="text-xs text-white/50">· {e.agent}</span>
+        </div>
+        <p className="text-sm text-white/80 truncate" title={e.message}>
+          {e.message}
+        </p>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={ignorePattern}
+          disabled={ignoring}
+          className="text-white/30 hover:text-[var(--color-prio-medium)] p-1 opacity-0 group-hover:opacity-100 transition-all"
+          title="Ignore this pattern (stop detecting this message)"
+        >
+          <Ban size={14} />
+        </button>
+        <span className="text-xs text-white/35 font-mono">
+          {formatTime(e.timestamp)}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function RecentEvents() {
   const events = useStore((s) => s.events);
@@ -33,34 +85,8 @@ export default function RecentEvents() {
         </div>
       ) : (
         <div className="overflow-y-auto -mr-2 pr-2 flex flex-col gap-1.5">
-          {events.map((e) => (
-            <div
-              key={e.id}
-              className="flex items-start gap-3 rounded-xl px-3 py-2.5 border border-white/5 hover:border-white/10 transition-colors"
-              style={{ background: CATEGORY_TINT[e.event_type] ?? "rgba(255,255,255,0.03)" }}
-            >
-              <span
-                className="mt-1 w-2 h-2 rounded-full shrink-0"
-                style={{ background: CATEGORY_COLOR[e.event_type] ?? "#888" }}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="text-xs font-semibold"
-                    style={{ color: CATEGORY_COLOR[e.event_type] ?? "#ccc" }}
-                  >
-                    {CATEGORY_LABELS[e.event_type] ?? e.event_type}
-                  </span>
-                  <span className="text-xs text-white/50">· {e.agent}</span>
-                </div>
-                <p className="text-sm text-white/80 truncate" title={e.message}>
-                  {e.message}
-                </p>
-              </div>
-              <span className="text-xs text-white/35 shrink-0 font-mono">
-                {formatTime(e.timestamp)}
-              </span>
-            </div>
+            {events.map((e) => (
+            <EventRow key={e.id} event={e} />
           ))}
         </div>
       )}

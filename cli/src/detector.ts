@@ -8,6 +8,7 @@ export interface Rule {
   priority: string; // "high" | "medium" | "low"
   enabled: boolean;
   patterns: string[];
+  agents?: string[]; // if set, only applies to these agents
 }
 
 export interface DetectionResult {
@@ -137,6 +138,8 @@ const PRIORITY_WEIGHT: Record<string, number> = { high: 3, medium: 2, low: 1 };
 
 export class Detector {
   private rules: Rule[] = DEFAULT_RULES;
+  private agentName: string = "";
+  private ignorePatterns: string[] = [];
 
   setRules(rules: Rule[]): void {
     if (Array.isArray(rules) && rules.length > 0) {
@@ -144,13 +147,30 @@ export class Detector {
     }
   }
 
+  setAgentName(name: string): void {
+    this.agentName = name;
+  }
+
+  setIgnorePatterns(patterns: string[]): void {
+    this.ignorePatterns = patterns;
+  }
+
   private activeRules(): Rule[] {
     return this.rules
-      .filter((r) => r.enabled)
+      .filter((r) => r.enabled && (!r.agents || r.agents.length === 0 || r.agents.includes(this.agentName)))
       .sort(
         (a, b) =>
           (PRIORITY_WEIGHT[b.priority] ?? 0) - (PRIORITY_WEIGHT[a.priority] ?? 0)
       );
+  }
+
+  private isIgnored(line: string): boolean {
+    if (this.ignorePatterns.length === 0) return false;
+    const haystack = line.toLowerCase().trim();
+    for (const pattern of this.ignorePatterns) {
+      if (haystack.includes(pattern.toLowerCase().trim())) return true;
+    }
+    return false;
   }
 
   // Returns the highest-priority matching rule for a single line of output,
@@ -159,6 +179,7 @@ export class Detector {
     const clean = stripAnsi(rawLine);
     const haystack = clean.toLowerCase();
     if (!haystack.trim()) return null;
+    if (this.isIgnored(clean)) return null;
 
     for (const rule of this.activeRules()) {
       for (const pattern of rule.patterns) {
