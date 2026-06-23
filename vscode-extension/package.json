@@ -1,0 +1,78 @@
+{
+  "name": "pingo-vscode",
+  "displayName": "Pingo",
+  "description": "Give your coding agents a voice. Hear, see, and track when Claude Code, OpenCode, Codex, Gemini, or Aider need your attention.",
+  "version": "1.0.0",
+  "publisher": "pingo",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "claude-code",
+    "codex",
+    "opencode",
+    "gemini",
+    "aider",
+    "terminal",
+    "notifications",
+    "ai",
+    "coding-agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ankitsharmagit/Pingo"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "pingo.testNotification", "title": "Pingo: Test Notification" },
+      { "command": "pingo.testSound", "title": "Pingo: Test Sound" },
+      { "command": "pingo.testVoice", "title": "Pingo: Test Voice" },
+      { "command": "pingo.showEvents", "title": "Pingo: Show Events" },
+      { "command": "pingo.openSettings", "title": "Pingo: Open Settings" }
+    ],
+    "configuration": {
+      "title": "Pingo",
+      "properties": {
+        "pingo.notify": {
+          "type": "string",
+          "enum": ["both", "sound", "voice", "disabled"],
+          "default": "both",
+          "description": "How Pingo notifies you of agent events: sound, voice, both, or disabled."
+        },
+        "pingo.port": {
+          "type": "number",
+          "default": 4001,
+          "description": "Localhost port the Pingo CLI exposes its event server on."
+        },
+        "pingo.showVscodeNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show native VS Code notifications (info/warning/error) for agent events."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node ./esbuild.js && node ./scripts/copy-assets.js",
+    "watch": "node ./esbuild.js --watch",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "@pingo/shared": "*",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "esbuild": "^0.21.0"
+  }
+}

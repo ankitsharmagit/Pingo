@@ -66,6 +66,16 @@ export const DEFAULT_RULES: Rule[] = [
       "confirm action",
       "press enter to continue",
       "waiting for approval",
+      // Claude Code permission dialog. Its TUI repositions the cursor between
+      // words, so the question text ("Do you want to…") collapses
+      // unpredictably when ANSI is stripped. The footer is rendered
+      // contiguously, so these survive intact and are specific to the
+      // tool-permission prompt.
+      "esc to cancel",
+      "tab to amend",
+      "do you want to",
+      "allow all edits",
+      "don't ask again",
     ],
     negative_patterns: ["approved", "already approved", "automatically approved"],
   },

@@ -1,0 +1,22 @@
+{
+  "name": "pingo-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pingo — give your coding agents a voice. CLI engine + VS Code extension.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "cli",
+    "vscode-extension"
+  ],
+  "scripts": {
+    "build": "npm run build -w @pingo/shared && npm run build -w pingo && npm run compile -w pingo-vscode",
+    "build:shared": "npm run build -w @pingo/shared",
+    "build:cli": "npm run build -w pingo",
+    "build:ext": "npm run compile -w pingo-vscode"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3"
+  }
+}

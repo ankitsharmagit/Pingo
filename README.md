@@ -7,9 +7,11 @@
 ╚═╝     ╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ 
 ```
 
-## ⏳ Never babysit coding agents again.
+# Give your coding agents a voice.
 
-Pingo alerts you when Claude Code, OpenCode, Codex, Gemini CLI, Cursor, or Aider need your attention — with voice, sound, or desktop notifications. Fully local, open source, works in seconds.
+Pingo hears, sees, and tracks when **Claude Code, OpenCode, Codex, Gemini, or
+Aider** need your attention — with sound, voice, and VS Code notifications.
+Fully local, open source, works in seconds.
 
 [![npm](https://img.shields.io/npm/v/pingo)](https://www.npmjs.com/package/pingo)
 [![License](https://img.shields.io/github/license/ankitsharmagit/Pingo)](LICENSE)
@@ -19,44 +21,32 @@ Pingo alerts you when Claude Code, OpenCode, Codex, Gemini CLI, Cursor, or Aider
 
 ## The Problem
 
-You start a coding agent. It's working through a task. A few minutes later it needs your approval — but you're no longer watching the terminal. The agent sits idle, waiting. Time wasted.
+You start a coding agent. It works through a task. A few minutes later it needs
+your approval — but you're no longer watching the terminal. The agent sits idle,
+waiting. Time wasted.
 
-Pingo watches your terminal for you and calls you back when your agent needs you.
+Pingo watches your agent for you and calls you back when it needs you.
 
 ## How It Works
+
+Pingo has two parts that work together:
+
+- **The CLI** is the engine. It wraps your agent in a real terminal, watches its
+  output, runs detection, and broadcasts structured events over a localhost
+  WebSocket. Run standalone, it plays sound/voice itself.
+- **The VS Code extension** is the presentation layer. It auto-discovers the
+  running CLI and turns its events into sounds, voice alerts, native VS Code
+  notifications, a status bar indicator, and an event history. No terminal
+  parsing, no duplicated detection.
 
 ```
 You start:        pingo claude
 Your agent runs:  [working...]
-Agent needs help: "Waiting for your response..."
-Pingo alerts you: 🔔 Claude Code needs your approval
+Agent needs you:  "Do you want to make this edit?"
+Pingo alerts you: 🔔 Claude Code needs approval   (sound · voice · VS Code)
 ```
 
-No more tab-checking. No more idle agents. Pingo monitors the output of any coding agent and notifies you the moment something needs your attention.
-
-## Features
-
-- **Voice alerts** — speaks events aloud so you hear them even when looking away
-- **Sound notifications** — plays distinct sounds for approvals, errors, completions, and more
-- **Desktop notifications** — rich OS-native alerts with event details
-- **Approval detection** — knows when an agent is waiting for you
-- **Completion detection** — alerts you when a task is done
-- **Error detection** — catches errors, warnings, and exceptions
-- **Rate limit detection** — lets you know when you've hit a quota
-- **Works with any agent** — Claude Code, OpenCode, Codex, Gemini CLI, Cursor, Aider, and more
-
-## Supported Agents
-
-| Agent | Command |
-|-------|---------|
-| Claude Code | `pingo claude` |
-| OpenCode | `pingo opencode` |
-| Codex CLI | `pingo codex` |
-| Gemini CLI | `pingo gemini` |
-| Aider | `pingo aider` |
-| Cursor | `pingo cursor` |
-
-## Installation
+## Install
 
 **1. Install the CLI**
 
@@ -64,84 +54,86 @@ No more tab-checking. No more idle agents. Pingo monitors the output of any codi
 npm install -g pingo
 ```
 
-**2. Configure notifications**
+**2. Install the VS Code extension**
+
+Search **"Pingo"** in the VS Code Marketplace, or:
 
 ```bash
-pingo setup
+code --install-extension pingo
 ```
 
-Choose voice, sound, both, or none.
+The extension auto-connects to the CLI — no setup. The status bar shows
+**`$(bell) Pingo Connected`** when attached.
 
-**3. Start monitoring**
+> The extension is optional. The CLI plays sound and voice on its own, so
+> `pingo claude` is useful anywhere.
+
+## Use it
+
+Run any supported agent through Pingo:
 
 ```bash
 pingo claude
+pingo opencode
+pingo codex
+pingo gemini
+pingo aider
 ```
 
-That's it. Your agent runs normally — Pingo watches the output and alerts you when needed.
+Pingo passes all input/output through untouched — your agent behaves exactly as
+before — while alerting you the moment it needs attention.
 
-### Desktop App (optional)
+## What Pingo detects
 
-For richer notifications, tray icon controls, and event history, download the desktop app from the [Releases](https://github.com/ankitsharmagit/Pingo/releases) page.
+| Event | Example |
+|-------|---------|
+| 🔔 Needs approval | "Do you want to make this edit?" |
+| 🎉 Task completed | "All changes applied" |
+| ❌ Error | exceptions, fatal errors, crashes |
+| ⚠ Authentication | "login required", "token expired" |
+| ⏳ Rate limit | "rate limit", "quota exceeded", "429" |
 
-| Platform | Download |
-|----------|----------|
-| Windows | `.msi` or `_Setup.exe` |
-| macOS | `.dmg` |
-| Linux | `.AppImage` |
-
-![Pingo Dashboard](docs/screenshot.png)
-
-> **Windows SmartScreen**: Pingo is not yet code-signed, so Windows may show a warning. Click **More info → Run anyway**. Source code is available for inspection.
-
-## Verify It Works
-
-```bash
-pingo test
-```
-
-You should hear a sound or voice notification. Run `pingo doctor` at any time to diagnose your setup.
-
-## Commands
+## CLI Commands
 
 | Command | What it does |
 |---------|-------------|
-| `pingo <agent>` | Launch and monitor an AI agent |
-| `pingo init` | First-time setup wizard (scans PATH + configures notifications) |
-| `pingo discover` | Scan PATH for installed coding agents |
-| `pingo setup` | Choose notification mode (voice, sound, both, none) |
-| `pingo doctor` | Check your installation and audio |
+| `pingo <agent>` | Launch and monitor a coding agent |
+| `pingo setup` | Choose notification mode (voice / sound / both / none) |
+| `pingo doctor` | Diagnose your installation and audio |
 | `pingo test` | Send a test notification |
-| `pingo --version` | Show installed version |
+| `pingo discover` | Scan PATH for installed coding agents |
+| `pingo init` | First-time setup wizard |
+
+## VS Code Commands
+
+`Pingo: Test Notification` · `Pingo: Test Sound` · `Pingo: Test Voice` ·
+`Pingo: Show Events` · `Pingo: Open Settings`
+
+## Repository layout
+
+```
+packages/shared/    @pingo/shared — event types, WebSocket protocol, notifier
+cli/                pingo — the monitoring engine (PTY + detection + event server)
+vscode-extension/   Pingo for VS Code — the presentation layer
+```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full picture and
+[docs/MIGRATION.md](docs/MIGRATION.md) for how this replaced the old desktop app.
 
 ## FAQ
 
-**Does Pingo modify my coding agent?**
+**Does Pingo modify my coding agent?** No. It wraps your agent and passes all I/O
+through untouched.
 
-No. Pingo wraps your agent and passes all I/O through untouched. Your agent works exactly as before.
+**Does Pingo send my code anywhere?** No. Everything runs locally — the CLI and
+the extension talk over `127.0.0.1`. No cloud, no telemetry.
 
-**Does Pingo send my code anywhere?**
-
-No. Everything runs locally on your machine. No cloud, no telemetry, no data leaves your computer.
-
-**Is Pingo open source?**
-
-Yes. Licensed under the MIT License. Source code is at [github.com/ankitsharmagit/Pingo](https://github.com/ankitsharmagit/Pingo).
-
-**Why does Windows show a SmartScreen warning?**
-
-The desktop app is not yet code-signed. Click **More info → Run anyway** to proceed. The app is safe and open source.
-
-## Roadmap
-
-- Mobile notifications (iOS / Android)
-- Team dashboards for shared agents
-- Remote approval flows
-- Analytics and usage insights
+**Is Pingo open source?** Yes, MIT licensed.
 
 ## Contributing
 
-Contributions welcome. Open an issue or pull request at [github.com/ankitsharmagit/Pingo](https://github.com/ankitsharmagit/Pingo).
+Contributions welcome — open an issue or PR at
+[github.com/ankitsharmagit/Pingo](https://github.com/ankitsharmagit/Pingo).
 
 ---
 

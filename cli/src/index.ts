@@ -6,18 +6,29 @@
 // Launches the target agent inside a pseudo-terminal (PTY) so it behaves
 // exactly as if run directly — interactive TUI agents like Claude Code see a
 // real TTY. Pingo streams the agent's output to the terminal untouched,
-// analyzes it in real time against the detection rules, and forwards matched
-// events to the desktop app over a localhost WebSocket.
+// analyzes it in real time against the detection rules, and broadcasts matched
+// events over a localhost WebSocket that UI clients (the VS Code extension)
+// subscribe to. When no client is connected, the CLI plays local audio itself.
 
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { exec } from "child_process";
 import * as pty from "@lydell/node-pty";
-import WebSocket from "ws";
-import { Detector, DEFAULT_RULES, Rule, DetectionResult } from "./detector";
+import { WebSocket, WebSocketServer } from "ws";
+import {
+  WS_PORT,
+  WS_HOST,
+  WS_URL,
+  Notifier,
+  voicePhrase,
+  type PingoEvent,
+  type StatusUpdate,
+  type EventType,
+  type ServerMessage,
+} from "@pingo/shared";
+import { Detector, DEFAULT_RULES, DetectionResult } from "./detector";
 
-const WS_URL = "ws://127.0.0.1:4001";
 // Suppress repeat notifications of the same category within this window (ms)
 // so a chatty agent doesn't spam the user.
 const DEBOUNCE_MS = 1500;
@@ -75,87 +86,97 @@ function buildSpawn(command: string, args: string[]): { file: string; args: stri
   return { file: resolved || command, args };
 }
 
-class AppLink {
-  private ws: WebSocket | null = null;
-  connected = false;
-  private closing = false;
-  private reconnectTimer: NodeJS.Timeout | null = null;
-  private onRules: (rules: Rule[]) => void;
-  private onIgnorePatterns: (patterns: string[]) => void;
+// Hosts the localhost WebSocket server that UI clients (the VS Code extension)
+// subscribe to. The CLI is the source of truth: it broadcasts every detected
+// event and status change to all connected clients.
+//
+// Multi-instance: the first `pingo` to start binds WS_PORT and owns the server.
+// A later instance that finds the port already taken runs in local-audio-only
+// mode (`serving` stays false) so it still notifies the user without fighting
+// over the port.
+class EventServer {
+  private wss: WebSocketServer | null = null;
+  private clients = new Set<WebSocket>();
+  private lastStatus: ServerMessage | null = null;
+  serving = false;
+  private hello: () => ServerMessage;
 
-  constructor(onRules: (rules: Rule[]) => void, onIgnorePatterns: (patterns: string[]) => void) {
-    this.onRules = onRules;
-    this.onIgnorePatterns = onIgnorePatterns;
+  constructor(hello: () => ServerMessage) {
+    this.hello = hello;
   }
 
-  connect(): void {
-    if (this.closing) return;
+  // True when at least one UI client is subscribed. The CLI uses this to decide
+  // whether to play local audio itself (no client) or defer to the UI.
+  get hasClients(): boolean {
+    return this.clients.size > 0;
+  }
+
+  start(): void {
+    let wss: WebSocketServer;
     try {
-      this.ws = new WebSocket(WS_URL);
+      wss = new WebSocketServer({ host: WS_HOST, port: WS_PORT });
     } catch {
-      this.scheduleReconnect();
-      return;
+      return; // synchronous failure — stay in local-audio mode
     }
+    this.wss = wss;
 
-    this.ws.on("open", () => {
-      this.connected = true;
-      this.send({ type: "get_rules" });
+    wss.on("listening", () => {
+      this.serving = true;
     });
 
-    this.ws.on("message", (raw: WebSocket.RawData) => {
+    wss.on("connection", (ws: WebSocket) => {
+      this.clients.add(ws);
       try {
-        const msg = JSON.parse(raw.toString());
-        if (msg.type === "rules") {
-          if (Array.isArray(msg.data)) {
-            this.onRules(msg.data as Rule[]);
-          }
-          if (Array.isArray(msg.ignore_patterns)) {
-            this.onIgnorePatterns(msg.ignore_patterns);
-          }
-        }
-      } catch {
-        /* ignore malformed frames */
-      }
-    });
-
-    this.ws.on("close", () => {
-      this.connected = false;
-      this.scheduleReconnect();
-    });
-
-    // Swallow connection errors: the agent must keep running even if the
-    // desktop app is closed.
-    this.ws.on("error", () => {
-      this.connected = false;
-    });
-  }
-
-  private scheduleReconnect(): void {
-    if (this.closing || this.reconnectTimer) return;
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.connect();
-    }, 2000);
-  }
-
-  send(payload: unknown): void {
-    if (this.connected && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      try {
-        this.ws.send(JSON.stringify(payload));
+        ws.send(JSON.stringify(this.hello()));
+        // Replay the latest status so a late-joining client (e.g. VS Code
+        // opened after the agent is already waiting for approval) immediately
+        // reflects the current state instead of looking idle.
+        if (this.lastStatus) ws.send(JSON.stringify(this.lastStatus));
       } catch {
         /* ignore */
+      }
+      ws.on("close", () => this.clients.delete(ws));
+      ws.on("error", () => this.clients.delete(ws));
+    });
+
+    // EADDRINUSE (another pingo owns the port) or any bind error: drop the
+    // server and fall back to local audio. The agent must keep running.
+    wss.on("error", () => {
+      this.serving = false;
+      this.clients.clear();
+      this.wss = null;
+    });
+  }
+
+  broadcast(message: ServerMessage): void {
+    if (message.type === "status") this.lastStatus = message;
+    const frame = JSON.stringify(message);
+    for (const ws of this.clients) {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(frame);
+        } catch {
+          /* ignore */
+        }
       }
     }
   }
 
   close(): void {
-    this.closing = true;
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    for (const ws of this.clients) {
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.clients.clear();
     try {
-      this.ws?.close();
+      this.wss?.close();
     } catch {
       /* ignore */
     }
+    this.wss = null;
   }
 }
 
@@ -267,7 +288,9 @@ async function cmdDoctor(): Promise<void> {
   const cfg = loadConfig();
   ok.push(`Notifications  (${cfg.notify})`);
 
-  // Desktop WebSocket
+  // Event server port. The CLI hosts the server on :4001 while an agent runs;
+  // UI clients (the VS Code extension) subscribe to it. Here we probe whether
+  // anything is already listening — informational, never a failure.
   try {
     const ws = new WebSocket(WS_URL);
     await new Promise<void>((resolve, reject) => {
@@ -275,9 +298,9 @@ async function cmdDoctor(): Promise<void> {
       ws.onerror = () => reject(new Error("connection refused"));
       setTimeout(() => reject(new Error("timeout")), 3000);
     });
-    ok.push("Desktop app    connected");
+    ok.push(`Event server   running on :${WS_PORT}  (a Pingo agent or UI is active)`);
   } catch {
-    fail.push("Desktop app    not reachable  (run desktop app or use CLI standalone)");
+    ok.push(`Event server   idle  (starts on :${WS_PORT} when you run \`pingo <agent>\`)`);
   }
 
   // Audio
@@ -521,11 +544,16 @@ function main(): void {
   detector.setAgentName(agent.toLowerCase());
   detector.setRules(DEFAULT_RULES);
 
-  const link = new AppLink(
-    (rules) => detector.setRules(rules),
-    (patterns) => detector.setIgnorePatterns(patterns)
-  );
-  link.connect();
+  // The CLI is the source of truth: host the event server and broadcast to any
+  // UI client (the VS Code extension) that subscribes.
+  let childPid = 0;
+  const server = new EventServer(() => ({
+    type: "hello",
+    data: { agent, pid: childPid, version: PKG.version },
+  }));
+  server.start();
+
+  const notifier = new Notifier();
 
   const { file, args } = buildSpawn(command, commandArgs);
   const cols = process.stdout.columns || 80;
@@ -544,88 +572,66 @@ function main(): void {
     process.stderr.write(
       `pingo: failed to start ${command}: ${(err as Error).message}\n`
     );
-    link.close();
+    server.close();
     process.exit(127);
   }
 
-  const childPid = child.pid ?? 0;
-  link.send({
+  childPid = child.pid ?? 0;
+  server.broadcast({
     type: "status",
-    data: {
-      agent,
-      pid: childPid,
-      status: "running",
-      start_time: startTime,
-      last_activity: startTime,
-    },
+    data: { agent, pid: childPid, status: "running", startTime, lastActivity: startTime },
   });
 
-  // ── Notification: voice (TTS) ──────────────────────────────────────────
-  const MAX_QUEUE = 16;
-  const voiceQueue: string[] = [];
-  let voiceBusy = false;
-  function speakQueued(): void {
-    if (voiceBusy || voiceQueue.length === 0) return;
-    voiceBusy = true;
-    const phrase = voiceQueue.shift()!;
-    exec(
-      `powershell -NoProfile -c "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('${phrase}')"`,
-      () => { voiceBusy = false; speakQueued(); }
-    );
-  }
-  function speakPhrase(category: string): void {
-    const map: Record<string, string> = {
-      permission: `${agent} needs permission`,
-      success: `${agent} completed a task`,
-      error: `${agent} hit an error`,
-      authentication: `${agent} needs authentication`,
-      ratelimit: `${agent} hit a rate limit`,
-      input: `${agent} is waiting for input`,
-    };
-    if (voiceQueue.length >= MAX_QUEUE) voiceQueue.shift();
-    voiceQueue.push(map[category] ?? `${agent} needs attention`);
-    speakQueued();
-  }
-
-  // ── Notification: WAV sound ────────────────────────────────────────────
-  const soundQueue: string[] = [];
-  let soundBusy = false;
-  function playQueued(): void {
-    if (soundBusy || soundQueue.length === 0) return;
-    soundBusy = true;
-    const wav = soundQueue.shift()!;
-    exec(
-      `powershell -NoProfile -c "(New-Object Media.SoundPlayer '${wav}').PlaySync()"`,
-      () => { soundBusy = false; playQueued(); }
-    );
-  }
-  function playSound(category: string): void {
-    const map: Record<string, string> = {
-      permission: "Windows Exclamation.wav",
-      success: "Windows Notify.wav",
-      error: "Windows Critical Stop.wav",
-      authentication: "Windows Exclamation.wav",
-      ratelimit: "Windows Critical Stop.wav",
-      input: "Windows Foreground.wav",
-    };
-    if (soundQueue.length >= MAX_QUEUE) soundQueue.shift();
-    soundQueue.push(`${process.env.WINDIR}\\media\\${map[category] ?? "Windows Notify.wav"}`);
-    playQueued();
-  }
-
-  // ── Notification: dispatch based on config ─────────────────────────────
+  // ── Local notifications (only when no UI client is subscribed) ──────────
+  // The shared Notifier handles cross-platform sound/voice playback. When the
+  // VS Code extension is connected it owns presentation, so the CLI stays quiet
+  // to avoid double notifications.
   const notifCfg = loadConfig();
-  function notify(category: string): void {
+  function notify(category: EventType): void {
     if (notifCfg.notify === "none") return;
-    if (notifCfg.notify === "voice" || notifCfg.notify === "both") speakPhrase(category);
-    if (notifCfg.notify === "sound" || notifCfg.notify === "both") playSound(category);
+    if (notifCfg.notify === "voice" || notifCfg.notify === "both") notifier.speak(voicePhrase(agent, category));
+    if (notifCfg.notify === "sound" || notifCfg.notify === "both") notifier.playSound(category);
   }
 
   const lastFired: Record<string, number> = {};
-  let lastOutputTime = Date.now();
+  let generating = false;
+  let generateTimer: NodeJS.Timeout | null = null;
+  let pendingNotify: DetectionResult | null = null;
   let repeatTimer: NodeJS.Timeout | null = null;
   function clearRepeat(): void {
     if (repeatTimer) { clearInterval(repeatTimer); repeatTimer = null; }
+  }
+  function dispatch(result: DetectionResult): void {
+    const category = result.category as EventType;
+    if (!server.hasClients) {
+      notify(category);
+      if ((category === "permission" || category === "authentication") && !repeatTimer) {
+        repeatTimer = setInterval(() => notify(category), 5000);
+      }
+      if (category !== "permission" && category !== "authentication") {
+        clearRepeat();
+      }
+    }
+    const status: StatusUpdate["status"] =
+      category === "permission" || category === "authentication"
+        ? "waiting"
+        : category === "error"
+          ? "error"
+          : "running";
+    server.broadcast({
+      type: "status",
+      data: { agent, pid: childPid, status, startTime, lastActivity: new Date().toISOString() },
+    });
+    const message =
+      result.line.length > 200 ? result.line.slice(0, 197) + "..." : result.line;
+    const event: PingoEvent = {
+      agent,
+      type: category,
+      message: message || result.ruleName,
+      priority: result.priority as PingoEvent["priority"],
+      timestamp: new Date().toISOString(),
+    };
+    server.broadcast({ type: "event", data: event });
   }
   function emit(result: DetectionResult): void {
     const now = Date.now();
@@ -634,50 +640,16 @@ function main(): void {
     if (now - last < DEBOUNCE_MS) return;
     lastFired[key] = now;
 
-    // Only fire input/permission if agent has been quiet for 500ms+.
-    // This avoids false triggers from mid-reasoning text that happens to
-    // match a pattern while the agent is still generating output.
-    if ((result.category === "input" || result.category === "permission") && now - lastOutputTime < 500) return;
-
-    if (!link.connected) {
-      notify(result.category);
-      // Repeat permission/authentication every 5s until user responds.
-      if ((result.category === "permission" || result.category === "authentication") && !repeatTimer) {
-        repeatTimer = setInterval(() => notify(result.category), 5000);
-      }
-      // Non-blocking categories cancel the repeat.
-      if (result.category !== "permission" && result.category !== "authentication") {
-        clearRepeat();
-      }
+    // If agent is still generating, defer input/permission notifications.
+    // The match might be mid-reasoning text that happens to contain a
+    // pattern keyword.  After 1s of silence the deferred notification is
+    // flushed — if no new output arrived, it was likely a real prompt.
+    if ((result.category === "input" || result.category === "permission") && generating) {
+      pendingNotify = result;
+      return;
     }
-
-    link.send({
-      type: "status",
-      data: {
-        agent,
-        pid: childPid,
-        status:
-          result.category === "permission" || result.category === "authentication"
-            ? "waiting"
-            : result.category === "error"
-              ? "error"
-              : "running",
-        start_time: startTime,
-        last_activity: new Date().toISOString(),
-      },
-    });
-
-    const message =
-      result.line.length > 200 ? result.line.slice(0, 197) + "..." : result.line;
-    link.send({
-      type: "event",
-      data: {
-        agent,
-        event_type: result.category,
-        message: message || result.ruleName,
-        priority: result.priority,
-      },
-    });
+    pendingNotify = null;
+    dispatch(result);
   }
 
   const analyze = makeAnalyzer(detector, emit);
@@ -685,7 +657,21 @@ function main(): void {
   // Stream the PTY output to the terminal untouched while analyzing it.
   child.onData((data: string) => {
     process.stdout.write(data);
-    lastOutputTime = Date.now();
+    generating = true;
+    if (generateTimer) clearTimeout(generateTimer);
+    generateTimer = setTimeout(() => {
+      generating = false;
+      if (pendingNotify) {
+        dispatch(pendingNotify);
+        pendingNotify = null;
+      }
+    }, 1000);
+    // NOTE: do not clear pendingNotify here. TUI agents (Claude Code,
+    // OpenCode) repaint continuously (spinner, status line), and those
+    // repaint chunks carry no matching text. Clearing on every chunk would
+    // wipe a real pending prompt before the silence-flush timer fires.
+    // emit() already overwrites pendingNotify on a newer match and clears it
+    // when a non-deferred event dispatches, so the latest match still wins.
     analyze(data);
   });
 
@@ -733,18 +719,13 @@ function main(): void {
   });
 
   child.onExit(({ exitCode }) => {
+    if (generateTimer) clearTimeout(generateTimer);
     clearRepeat();
-    link.send({
+    server.broadcast({
       type: "status",
-      data: {
-        agent,
-        pid: childPid,
-        status: "idle",
-        start_time: startTime,
-        last_activity: new Date().toISOString(),
-      },
+      data: { agent, pid: childPid, status: "idle", startTime, lastActivity: new Date().toISOString() },
     });
-    link.close();
+    server.close();
 
     stdin.removeListener("data", onStdin);
     if (stdin.isTTY && typeof stdin.setRawMode === "function") {

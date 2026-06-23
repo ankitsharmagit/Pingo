@@ -4,13 +4,10 @@ node_modules/
 # Build output
 dist/
 dist-ssr/
-**/target/
+out/
 
-# Tauri generated schemas
-**/gen/schemas/
-
-# Local machine-specific cargo config (e.g. redirected target-dir)
-**/.cargo/config.toml
+# VS Code extension package artifacts
+*.vsix
 
 # Logs
 logs/

@@ -1,0 +1,15 @@
+{
+  "name": "@pingo/shared",
+  "version": "1.0.0",
+  "description": "Shared event types, WebSocket protocol, and notifier for Pingo CLI + VS Code extension",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "sounds"
+  ],
+  "scripts": {
+    "build": "tsc"
+  }
+}
