@@ -20,7 +20,7 @@ import { Detector, DEFAULT_RULES, Rule, DetectionResult } from "./detector";
 const WS_URL = "ws://127.0.0.1:4001";
 // Suppress repeat notifications of the same category within this window (ms)
 // so a chatty agent doesn't spam the user.
-const DEBOUNCE_MS = 2500;
+const DEBOUNCE_MS = 1500;
 
 function prettyAgentName(command: string): string {
   const base = (command.split(/[\\/]/).pop() ?? command).replace(
@@ -622,15 +622,22 @@ function main(): void {
   }
 
   const lastFired: Record<string, number> = {};
+  let lastOutputTime = Date.now();
   let repeatTimer: NodeJS.Timeout | null = null;
   function clearRepeat(): void {
     if (repeatTimer) { clearInterval(repeatTimer); repeatTimer = null; }
   }
   function emit(result: DetectionResult): void {
     const now = Date.now();
-    const last = lastFired[result.category] ?? 0;
+    const key = `${result.category}:${result.matchedPattern}`;
+    const last = lastFired[key] ?? 0;
     if (now - last < DEBOUNCE_MS) return;
-    lastFired[result.category] = now;
+    lastFired[key] = now;
+
+    // Only fire input/permission if agent has been quiet for 500ms+.
+    // This avoids false triggers from mid-reasoning text that happens to
+    // match a pattern while the agent is still generating output.
+    if ((result.category === "input" || result.category === "permission") && now - lastOutputTime < 500) return;
 
     if (!link.connected) {
       notify(result.category);
@@ -678,6 +685,7 @@ function main(): void {
   // Stream the PTY output to the terminal untouched while analyzing it.
   child.onData((data: string) => {
     process.stdout.write(data);
+    lastOutputTime = Date.now();
     analyze(data);
   });
 
