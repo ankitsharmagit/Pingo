@@ -168,6 +168,11 @@ fn seed_default_rules(conn: &Connection) -> Result<()> {
             patterns: vec![
                 "how can i help".to_string(),
                 "what would you like".to_string(),
+                "what you need".to_string(),
+                "what's next".to_string(),
+                "ready to help".to_string(),
+                "ask me anything".to_string(),
+                "type your".to_string(),
                 "select an option".to_string(),
                 "choose an".to_string(),
                 "enter your".to_string(),

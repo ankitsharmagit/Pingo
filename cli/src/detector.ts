@@ -113,6 +113,11 @@ export const DEFAULT_RULES: Rule[] = [
     patterns: [
       "how can i help",
       "what would you like",
+      "what you need",
+      "what's next",
+      "ready to help",
+      "ask me anything",
+      "type your",
       "select an option",
       "choose an",
       "enter your",
