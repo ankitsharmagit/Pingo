@@ -1,126 +1,139 @@
 # Pingo
 
-Monitor AI coding agents (Claude Code, OpenCode, Aider, Gemini CLI, Codex, …)
-and get notified when they finish, need approval, hit errors, or need
-authentication — with native OS notifications and sounds. Fully local, no OCR,
-no cloud, agent-agnostic.
+**Never babysit coding agents again.**
+
+Pingo alerts you when Claude Code, OpenCode, Codex, Gemini CLI, Cursor, or Aider need your attention — with voice, sound, or desktop notifications. Fully local, open source, works in seconds.
+
+[![npm](https://img.shields.io/npm/v/pingo)](https://www.npmjs.com/package/pingo)
+[![License](https://img.shields.io/github/license/ankitsharmagit/Pingo)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/ankitsharmagit/Pingo/pulls)
+
+---
+
+## The Problem
+
+You start a coding agent. It's working through a task. A few minutes later it needs your approval — but you're no longer watching the terminal. The agent sits idle, waiting. Time wasted.
+
+Pingo watches your terminal for you and calls you back when your agent needs you.
+
+## How It Works
+
+```
+You start:        pingo claude
+Your agent runs:  [working...]
+Agent needs help: "Waiting for your response..."
+Pingo alerts you: 🔔 Claude Code needs your approval
+```
+
+No more tab-checking. No more idle agents. Pingo monitors the output of any coding agent and notifies you the moment something needs your attention.
+
+## Features
+
+- **Voice alerts** — speaks events aloud so you hear them even when looking away
+- **Sound notifications** — plays distinct sounds for approvals, errors, completions, and more
+- **Desktop notifications** — rich OS-native alerts with event details
+- **Approval detection** — knows when an agent is waiting for you
+- **Completion detection** — alerts you when a task is done
+- **Error detection** — catches errors, warnings, and exceptions
+- **Rate limit detection** — lets you know when you've hit a quota
+- **Works with any agent** — Claude Code, OpenCode, Codex, Gemini CLI, Cursor, Aider, and more
+
+## Supported Agents
+
+| Agent | Command |
+|-------|---------|
+| Claude Code | `pingo claude` |
+| OpenCode | `pingo opencode` |
+| Codex CLI | `pingo codex` |
+| Gemini CLI | `pingo gemini` |
+| Aider | `pingo aider` |
+| Cursor | `pingo cursor` |
 
 ## Installation
 
-### Prerequisites
-
-- **Node.js** v18 or later ([download](https://nodejs.org))
-
-### Install the CLI
+**1. Install the CLI**
 
 ```bash
 npm install -g pingo
 ```
 
-Verify it works:
-
-```bash
-pingo --version
-```
-
-### Desktop app (optional)
-
-Download the latest installer from the
-[Releases](https://github.com/ankitsharmagit/Pingo/releases) page:
-
-| Platform | Installer |
-| -------- | --------- |
-| Windows  | `Pingo_*.msi` or `Pingo_*_Setup.exe` |
-| macOS    | `Pingo_*.dmg` |
-| Linux    | `Pingo_*.AppImage` |
-
-Launch the app — it auto-connects to your CLI wrapper. No configuration needed.
-
-![Pingo Dashboard](<img width="959" height="562" alt="image" src="https://github.com/user-attachments/assets/11060843-6c5d-4216-a410-29df7fb7bab4" />)
-
-> **Windows SmartScreen**: Since Pingo is not yet code-signed, Windows may
-> show a SmartScreen warning. Click **More info** → **Run anyway** to proceed.
-> Pingo is open source and the source code is available for inspection.
-
-> The CLI installs in one command (`npm install -g pingo`). The desktop app
-> installers are built automatically via CI on every tagged release.
-
-## Usage
-
-Run any AI agent through Pingo:
-
-```bash
-pingo claude          # monitor Claude Code
-pingo opencode        # monitor OpenCode
-pingo aider           # monitor Aider
-pingo gemini          # monitor Gemini CLI
-pingo codex           # monitor Codex CLI
-```
-
-Pingo wraps the agent, passes all I/O through to your terminal, and analyzes
-every line for events. You'll hear notification sounds and see alerts
-immediately.
-
-### Without the desktop app
-
-Notifications work using your system sounds and text-to-speech. Configure them:
+**2. Configure notifications**
 
 ```bash
 pingo setup
 ```
 
-### With the desktop app
+Choose voice, sound, both, or none.
 
-Keep the desktop app running in the background for a rich dashboard, tray
-icon, event history, and custom sounds per event category.
+**3. Start monitoring**
+
+```bash
+pingo claude
+```
+
+That's it. Your agent runs normally — Pingo watches the output and alerts you when needed.
+
+### Desktop App (optional)
+
+For richer notifications, tray icon controls, and event history, download the desktop app from the [Releases](https://github.com/ankitsharmagit/Pingo/releases) page.
+
+| Platform | Download |
+|----------|----------|
+| Windows | `.msi` or `_Setup.exe` |
+| macOS | `.dmg` |
+| Linux | `.AppImage` |
+
+![Pingo Dashboard](docs/screenshot.png)
+
+> **Windows SmartScreen**: Pingo is not yet code-signed, so Windows may show a warning. Click **More info → Run anyway**. Source code is available for inspection.
+
+## Verify It Works
+
+```bash
+pingo test
+```
+
+You should hear a sound or voice notification. Run `pingo doctor` at any time to diagnose your setup.
 
 ## Commands
 
-| Command | Description |
-| ------- | ----------- |
+| Command | What it does |
+|---------|-------------|
 | `pingo <agent>` | Launch and monitor an AI agent |
-| `pingo setup` | Configure notification mode (voice, sound, both, none) |
-| `pingo doctor` | Diagnose your setup — CLI version, audio, desktop connectivity |
-| `pingo test` | Send a test notification to verify your config |
+| `pingo setup` | Choose notification mode (voice, sound, both, none) |
+| `pingo doctor` | Check your installation and audio |
+| `pingo test` | Send a test notification |
 | `pingo --version` | Show installed version |
 
-## Notification modes
+## FAQ
 
-```
-pingo setup
-```
+**Does Pingo modify my coding agent?**
 
-- **sound** — plays system notification sounds (default)
-- **voice** — speaks alerts via text-to-speech
-- **both** — sound + voice
-- **none** — silent (terminal output only)
+No. Pingo wraps your agent and passes all I/O through untouched. Your agent works exactly as before.
 
-Without the desktop app, Pingo uses your system sounds and TTS. With the
-desktop app running, notifications are richer (custom sounds, tray icon, event
-history).
+**Does Pingo send my code anywhere?**
 
-## Rules
+No. Everything runs locally on your machine. No cloud, no telemetry, no data leaves your computer.
 
-Pingo monitors agent output for these events:
+**Is Pingo open source?**
 
-| Event | Example triggers |
-| ----- | ---------------- |
-| Permission Required | "waiting for approval", "press Enter to continue" |
-| Task Completed | "completed", "all changes applied" |
-| Authentication | "login required", "token expired" |
-| Error | "error", "fatal", "exception" |
-| Rate Limit | "rate limit", "quota exceeded", "429" |
+Yes. Licensed under the MIT License. Source code is at [github.com/ankitsharmagit/Pingo](https://github.com/ankitsharmagit/Pingo).
 
-Rules are fully customizable. With the desktop app, edit them in the Rules tab.
+**Why does Windows show a SmartScreen warning?**
 
-## Architecture
+The desktop app is not yet code-signed. Click **More info → Run anyway** to proceed. The app is safe and open source.
 
-```
-Agent → pingo CLI → terminal (passthrough)
-                 → desktop app (WebSocket) → notification + sound + log
-```
+## Roadmap
 
-The CLI wrapper launches your agent, streams its output to the terminal
-untouched, and analyzes every line against detection rules. If the desktop app
-is running, events are sent over a local WebSocket; otherwise, Pingo handles
-notifications itself using your system's sound and voice capabilities.
+- Mobile notifications (iOS / Android)
+- Team dashboards for shared agents
+- Remote approval flows
+- Analytics and usage insights
+
+## Contributing
+
+Contributions welcome. Open an issue or pull request at [github.com/ankitsharmagit/Pingo](https://github.com/ankitsharmagit/Pingo).
+
+---
+
+Licensed under the MIT License.
