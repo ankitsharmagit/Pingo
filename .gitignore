@@ -9,6 +9,9 @@ dist-ssr/
 # Tauri generated schemas
 **/gen/schemas/
 
+# Local machine-specific cargo config (e.g. redirected target-dir)
+**/.cargo/config.toml
+
 # Logs
 logs/
 *.log

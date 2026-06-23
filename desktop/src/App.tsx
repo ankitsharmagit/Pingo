@@ -28,7 +28,12 @@ function App() {
   const prefs = useStore((s) => s.prefs);
   const setPref = useStore((s) => s.setPref);
   const events = useStore((s) => s.events);
-  const sessions = useStore((s) => Object.values(s.sessions));
+  // Select the raw map (stable reference) and derive the array in render.
+  // Returning Object.values(...) directly from the selector creates a new
+  // array every call, which breaks zustand v5 / useSyncExternalStore snapshot
+  // caching and causes an infinite render loop.
+  const sessionMap = useStore((s) => s.sessions);
+  const sessions = Object.values(sessionMap);
 
   const paused = isPaused(prefs);
 

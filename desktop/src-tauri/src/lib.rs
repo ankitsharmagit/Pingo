@@ -56,6 +56,7 @@ fn get_prefs(db_state: tauri::State<DbState>) -> Result<std::collections::HashMa
         "sound_permission",
         "sound_error",
         "sound_authentication",
+        "sound_input",
     ];
     let mut prefs = std::collections::HashMap::new();
     for key in keys {
@@ -87,6 +88,7 @@ pub fn sound_pref_key(category: &str) -> Option<&'static str> {
         "error" => Some("sound_error"),
         "authentication" => Some("sound_authentication"),
         "ratelimit" => Some("sound_error"),
+        "input" => Some("sound_input"),
         _ => None,
     }
 }

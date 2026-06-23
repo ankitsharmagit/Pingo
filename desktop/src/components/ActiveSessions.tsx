@@ -3,7 +3,11 @@ import { useStore } from "../store/useStore";
 import { SESSION_COLOR, timeAgo } from "../lib/ui";
 
 export default function ActiveSessions() {
-  const sessions = useStore((s) => Object.values(s.sessions));
+  // Select the stable map and derive the array in render (a selector returning
+  // Object.values(...) creates a new array each call and breaks zustand v5's
+  // snapshot caching -> infinite render loop / blank screen).
+  const sessionMap = useStore((s) => s.sessions);
+  const sessions = Object.values(sessionMap);
 
   return (
     <section className="glass rounded-2xl p-5">

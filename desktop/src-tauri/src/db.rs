@@ -18,7 +18,7 @@ pub struct EventLog {
     pub id: String,
     pub timestamp: String,
     pub agent: String,
-    pub event_type: String, // "permission" | "success" | "error" | "authentication" | "ratelimit"
+    pub event_type: String, // "permission" | "success" | "error" | "authentication" | "ratelimit" | "input"
     pub message: String,
     pub priority: String,
 }
@@ -135,6 +135,26 @@ fn seed_default_rules(conn: &Connection) -> Result<()> {
                 "crashed".to_string(),
                 "failed".to_string(),
                 "exception".to_string(),
+            ],
+        },
+        Rule {
+            id: Uuid::new_v4().to_string(),
+            name: "Waiting for Input".to_string(),
+            category: "input".to_string(),
+            priority: "medium".to_string(),
+            enabled: true,
+            patterns: vec![
+                "how can i help".to_string(),
+                "what would you like".to_string(),
+                "select an option".to_string(),
+                "choose an".to_string(),
+                "enter your".to_string(),
+                "proceed?".to_string(),
+                "could you clarify".to_string(),
+                "are you asking about".to_string(),
+                "permission for".to_string(),
+                "i need more information".to_string(),
+                "please clarify".to_string(),
             ],
         },
         Rule {

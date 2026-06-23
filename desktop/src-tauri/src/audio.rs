@@ -15,6 +15,7 @@ const SND_PERMISSION: &[u8] = include_bytes!("../../public/sounds/permission.wav
 const SND_SUCCESS: &[u8] = include_bytes!("../../public/sounds/success.wav");
 const SND_ERROR: &[u8] = include_bytes!("../../public/sounds/error.wav");
 const SND_AUTHENTICATION: &[u8] = include_bytes!("../../public/sounds/authentication.wav");
+const SND_INPUT: &[u8] = include_bytes!("../../public/sounds/input.wav");
 
 fn default_bytes(category: &str) -> &'static [u8] {
     match category {
@@ -23,6 +24,7 @@ fn default_bytes(category: &str) -> &'static [u8] {
         "error" => SND_ERROR,
         "authentication" => SND_AUTHENTICATION,
         "ratelimit" => SND_ERROR,
+        "input" => SND_INPUT,
         _ => SND_SUCCESS,
     }
 }
@@ -82,7 +84,7 @@ mod tests {
     // an audio device (decoding is independent of output).
     #[test]
     fn embedded_defaults_decode() {
-        for cat in ["permission", "success", "error", "authentication"] {
+        for cat in ["permission", "success", "error", "authentication", "input"] {
             let bytes = default_bytes(cat).to_vec();
             assert!(bytes.len() > 44, "{cat}: too small to be a WAV");
             let source = rodio::Decoder::new(Cursor::new(bytes))

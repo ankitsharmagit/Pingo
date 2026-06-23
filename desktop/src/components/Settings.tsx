@@ -10,6 +10,7 @@ const SOUND_ROWS: { category: string; label: string; prefKey: string }[] = [
   { category: "success", label: "Success", prefKey: PREF_KEYS.soundSuccess },
   { category: "error", label: "Error", prefKey: PREF_KEYS.soundError },
   { category: "authentication", label: "Authentication", prefKey: PREF_KEYS.soundAuthentication },
+  { category: "input", label: "Waiting for Input", prefKey: PREF_KEYS.soundInput },
 ];
 
 function SoundRow({ category, label, prefKey }: { category: string; label: string; prefKey: string }) {

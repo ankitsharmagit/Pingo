@@ -19,7 +19,7 @@ pub enum ClientMessage {
     #[serde(rename = "event")]
     Event {
         agent: String,
-        event_type: String, // "permission" | "success" | "error" | "authentication" | "ratelimit"
+        event_type: String, // "permission" | "success" | "error" | "authentication" | "ratelimit" | "input"
         message: String,
         priority: String,
     },
@@ -36,26 +36,44 @@ pub enum ClientMessage {
 pub fn start_ws_server(app_handle: AppHandle, port: u16) {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     
-    tokio::spawn(async move {
-        let listener = match TcpListener::bind(&addr).await {
-            Ok(l) => {
-                println!("WebSocket server listening on ws://{}", addr);
-                l
-            }
+    // The Tauri `setup` hook (where this is called) is not inside a Tokio
+    // runtime, so `tokio::spawn` there would panic with "no reactor running".
+    // Run the server on its own dedicated multi-thread runtime in a background
+    // thread; this guarantees a reactor with the IO/time drivers the WebSocket
+    // server needs, independent of Tauri's internal runtime.
+    std::thread::spawn(move || {
+        let rt = match tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(rt) => rt,
             Err(e) => {
-                eprintln!("Failed to bind WebSocket server to {}: {}", addr, e);
+                eprintln!("Failed to build Tokio runtime for WebSocket server: {}", e);
                 return;
             }
         };
 
-        while let Ok((stream, _)) = listener.accept().await {
-            let app_clone = app_handle.clone();
-            tokio::spawn(async move {
-                if let Err(e) = handle_connection(stream, app_clone).await {
-                    eprintln!("Error handling WebSocket connection: {}", e);
+        rt.block_on(async move {
+            let listener = match TcpListener::bind(&addr).await {
+                Ok(l) => {
+                    println!("WebSocket server listening on ws://{}", addr);
+                    l
                 }
-            });
-        }
+                Err(e) => {
+                    eprintln!("Failed to bind WebSocket server to {}: {}", addr, e);
+                    return;
+                }
+            };
+
+            while let Ok((stream, _)) = listener.accept().await {
+                let app_clone = app_handle.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handle_connection(stream, app_clone).await {
+                        eprintln!("Error handling WebSocket connection: {}", e);
+                    }
+                });
+            }
+        });
     });
 }
 

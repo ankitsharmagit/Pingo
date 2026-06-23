@@ -3,7 +3,8 @@ export type Category =
   | "success"
   | "error"
   | "authentication"
-  | "ratelimit";
+  | "ratelimit"
+  | "input";
 
 export interface Rule {
   id: string;
@@ -37,6 +38,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   error: "Agent Error",
   authentication: "Authentication Required",
   ratelimit: "Rate Limit Reached",
+  input: "Waiting for Input",
 };
 
 export const PREF_KEYS = {
@@ -46,4 +48,5 @@ export const PREF_KEYS = {
   soundPermission: "sound_permission",
   soundError: "sound_error",
   soundAuthentication: "sound_authentication",
+  soundInput: "sound_input",
 } as const;

@@ -6,6 +6,7 @@ export const CATEGORY_COLOR: Record<string, string> = {
   error: "#ff5d73",
   authentication: "#ffb347",
   ratelimit: "#ff8fab",
+  input: "#4fc3f7",
 };
 
 export const CATEGORY_TINT: Record<string, string> = {
@@ -14,6 +15,7 @@ export const CATEGORY_TINT: Record<string, string> = {
   error: "rgba(255,93,115,0.15)",
   authentication: "rgba(255,179,71,0.15)",
   ratelimit: "rgba(255,143,171,0.15)",
+  input: "rgba(79,195,247,0.15)",
 };
 
 export const PRIORITY_COLOR: Record<string, string> = {

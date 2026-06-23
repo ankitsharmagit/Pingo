@@ -4,7 +4,7 @@ import { useStore } from "../store/useStore";
 import { Rule } from "../lib/types";
 import { PRIORITY_COLOR } from "../lib/ui";
 
-const CATEGORIES = ["permission", "success", "error", "authentication", "ratelimit"];
+const CATEGORIES = ["permission", "success", "error", "authentication", "ratelimit", "input"];
 const PRIORITIES = ["high", "medium", "low"];
 
 function emptyRule(): Rule {

@@ -3,12 +3,15 @@
 //
 //   pingo <command> [...args]
 //
-// Launches the target agent, streams its stdout/stderr to the terminal
-// untouched, analyzes the output in real time against the detection rules,
-// and forwards matched events to the Pingo desktop app over a localhost
-// WebSocket. The user experience is identical to running the agent directly.
+// Launches the target agent inside a pseudo-terminal (PTY) so it behaves
+// exactly as if run directly — interactive TUI agents like Claude Code see a
+// real TTY. Pingo streams the agent's output to the terminal untouched,
+// analyzes it in real time against the detection rules, and forwards matched
+// events to the desktop app over a localhost WebSocket.
 
-import spawn from "cross-spawn";
+import * as fs from "fs";
+import * as path from "path";
+import * as pty from "@lydell/node-pty";
 import WebSocket from "ws";
 import { Detector, DEFAULT_RULES, Rule, DetectionResult } from "./detector";
 
@@ -18,10 +21,56 @@ const WS_URL = "ws://127.0.0.1:4001";
 const DEBOUNCE_MS = 2500;
 
 function prettyAgentName(command: string): string {
-  const base = (command.split(/[\\/]/).pop() ?? command)
-    .replace(/\.(exe|cmd|bat|sh|js)$/i, "");
+  const base = (command.split(/[\\/]/).pop() ?? command).replace(
+    /\.(exe|cmd|bat|sh|ps1|js)$/i,
+    ""
+  );
   if (!base) return command;
   return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+// On Windows, a bare command like `claude` is usually a `.cmd`/`.ps1`/`.exe`
+// shim on PATH. CreateProcess (used by the PTY) does not apply PATHEXT, so we
+// resolve the real file ourselves and pick an appropriate launcher.
+function resolveWindowsExecutable(command: string): string | null {
+  if (path.isAbsolute(command) || command.includes("/") || command.includes("\\")) {
+    return fs.existsSync(command) ? command : null;
+  }
+  const exts = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((e) => e.trim())
+    .filter(Boolean);
+  const hasExt = exts.some((e) => command.toLowerCase().endsWith(e.toLowerCase()));
+  const candidates = hasExt ? [command] : [...exts.map((e) => command + e), command];
+  const dirs = (process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    for (const cand of candidates) {
+      const full = path.join(dir, cand);
+      try {
+        if (fs.statSync(full).isFile()) return full;
+      } catch {
+        /* not here */
+      }
+    }
+  }
+  return null;
+}
+
+function buildSpawn(command: string, args: string[]): { file: string; args: string[] } {
+  if (process.platform !== "win32") {
+    return { file: command, args };
+  }
+  const resolved = resolveWindowsExecutable(command);
+  if (resolved && /\.(cmd|bat)$/i.test(resolved)) {
+    return { file: process.env.ComSpec || "cmd.exe", args: ["/c", resolved, ...args] };
+  }
+  if (resolved && /\.ps1$/i.test(resolved)) {
+    return {
+      file: "powershell.exe",
+      args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", resolved, ...args],
+    };
+  }
+  return { file: resolved || command, args };
 }
 
 class AppLink {
@@ -101,6 +150,31 @@ class AppLink {
   }
 }
 
+// Buffer partial lines so detection runs on complete lines of output.
+function makeAnalyzer(
+  detector: Detector,
+  emit: (r: DetectionResult) => void
+): (chunk: string) => void {
+  let buffer = "";
+  return (chunk: string) => {
+    buffer += chunk;
+    let idx: number;
+    while ((idx = buffer.search(/\r\n|\n|\r/)) !== -1) {
+      const line = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + (buffer[idx] === "\r" && buffer[idx + 1] === "\n" ? 2 : 1));
+      const result = detector.detect(line);
+      if (result) emit(result);
+    }
+    // Also detect on a long unterminated buffer (e.g. a prompt with no newline).
+    if (buffer.length > 0) {
+      const result = detector.detect(buffer);
+      if (result) emit(result);
+    }
+    // Avoid unbounded growth if the agent never emits newlines.
+    if (buffer.length > 8192) buffer = buffer.slice(-2048);
+  };
+}
+
 function main(): void {
   const argv = process.argv.slice(2);
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
@@ -134,20 +208,26 @@ function main(): void {
   const link = new AppLink((rules) => detector.setRules(rules));
   link.connect();
 
-  const child = spawn(command, commandArgs, {
-    stdio: ["pipe", "pipe", "pipe"],
-    env: process.env,
-  });
+  const { file, args } = buildSpawn(command, commandArgs);
+  const cols = process.stdout.columns || 80;
+  const rows = process.stdout.rows || 24;
 
-  child.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code === "ENOENT") {
-      process.stderr.write(`pingo: command not found: ${command}\n`);
-    } else {
-      process.stderr.write(`pingo: failed to start ${command}: ${err.message}\n`);
-    }
+  let child: pty.IPty;
+  try {
+    child = pty.spawn(file, args, {
+      name: "xterm-256color",
+      cols,
+      rows,
+      cwd: process.cwd(),
+      env: process.env as { [key: string]: string },
+    });
+  } catch (err) {
+    process.stderr.write(
+      `pingo: failed to start ${command}: ${(err as Error).message}\n`
+    );
     link.close();
     process.exit(127);
-  });
+  }
 
   const childPid = child.pid ?? 0;
   link.send({
@@ -161,21 +241,7 @@ function main(): void {
     },
   });
 
-  // Forward terminal input to the child. Raw mode passes individual keystrokes
-  // (and Ctrl+C, Enter, etc.) straight through so interactive prompts work.
-  if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-    process.stdin.setRawMode(true);
-  }
-  process.stdin.resume();
-  if (child.stdin) {
-    process.stdin.pipe(child.stdin);
-    child.stdin.on("error", () => {
-      /* child closed stdin — ignore EPIPE */
-    });
-  }
-
   const lastFired: Record<string, number> = {};
-
   function emit(result: DetectionResult): void {
     const now = Date.now();
     const last = lastFired[result.category] ?? 0;
@@ -198,7 +264,8 @@ function main(): void {
       },
     });
 
-    const message = result.line.length > 200 ? result.line.slice(0, 197) + "..." : result.line;
+    const message =
+      result.line.length > 200 ? result.line.slice(0, 197) + "..." : result.line;
     link.send({
       type: "event",
       data: {
@@ -210,50 +277,57 @@ function main(): void {
     });
   }
 
-  // Buffer partial lines per stream so detection runs on complete lines.
-  function makeAnalyzer(): (chunk: Buffer) => void {
-    let buffer = "";
-    return (chunk: Buffer) => {
-      buffer += chunk.toString("utf8");
-      let idx: number;
-      while ((idx = buffer.search(/\r\n|\n|\r/)) !== -1) {
-        const line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + (buffer[idx] === "\r" && buffer[idx + 1] === "\n" ? 2 : 1));
-        const result = detector.detect(line);
-        if (result) emit(result);
-      }
-      // Detect on a long unterminated buffer too (e.g. a prompt with no newline).
-      if (buffer.length > 0) {
-        const result = detector.detect(buffer);
-        if (result) emit(result);
-      }
-    };
+  const analyze = makeAnalyzer(detector, emit);
+
+  // Stream the PTY output to the terminal untouched while analyzing it.
+  child.onData((data: string) => {
+    process.stdout.write(data);
+    analyze(data);
+  });
+
+  // Forward terminal input to the child. Raw mode passes individual keystrokes
+  // (including Ctrl+C, arrows, Enter) straight through so the agent's TUI works.
+  const stdin = process.stdin;
+  if (stdin.isTTY && typeof stdin.setRawMode === "function") {
+    stdin.setRawMode(true);
   }
-
-  const analyzeStdout = makeAnalyzer();
-  const analyzeStderr = makeAnalyzer();
-
-  child.stdout?.on("data", (chunk: Buffer) => {
-    process.stdout.write(chunk);
-    analyzeStdout(chunk);
-  });
-  child.stderr?.on("data", (chunk: Buffer) => {
-    process.stderr.write(chunk);
-    analyzeStderr(chunk);
-  });
-
-  // Forward termination signals to the child.
-  const forward = (signal: NodeJS.Signals) => () => {
+  stdin.resume();
+  const onStdin = (data: Buffer) => {
     try {
-      child.kill(signal);
+      child.write(data.toString("utf8"));
+    } catch {
+      /* child gone */
+    }
+  };
+  stdin.on("data", onStdin);
+
+  // Keep the PTY size in sync with the real terminal.
+  const onResize = () => {
+    try {
+      child.resize(process.stdout.columns || 80, process.stdout.rows || 24);
     } catch {
       /* ignore */
     }
   };
-  process.on("SIGINT", forward("SIGINT"));
-  process.on("SIGTERM", forward("SIGTERM"));
+  process.stdout.on("resize", onResize);
 
-  child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+  // Forward termination signals to the child.
+  process.on("SIGINT", () => {
+    try {
+      child.write("\x03");
+    } catch {
+      /* ignore */
+    }
+  });
+  process.on("SIGTERM", () => {
+    try {
+      child.kill();
+    } catch {
+      /* ignore */
+    }
+  });
+
+  child.onExit(({ exitCode }) => {
     link.send({
       type: "status",
       data: {
@@ -266,19 +340,15 @@ function main(): void {
     });
     link.close();
 
-    if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-      process.stdin.setRawMode(false);
+    stdin.removeListener("data", onStdin);
+    if (stdin.isTTY && typeof stdin.setRawMode === "function") {
+      stdin.setRawMode(false);
     }
-    process.stdin.pause();
+    stdin.pause();
+    process.stdout.removeListener("resize", onResize);
 
     // Give the WebSocket a moment to flush the final frames.
-    setTimeout(() => {
-      if (signal) {
-        process.exit(1);
-      } else {
-        process.exit(code ?? 0);
-      }
-    }, 80);
+    setTimeout(() => process.exit(exitCode ?? 0), 80);
   });
 }
 

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "references": {
+    "cli": {
+      "path": "cli",
+      "description": "Use for pingo CLI wrapper (Node.js/TypeScript) - the process manager that wraps Claude Code in a PTY"
+    },
+    "desktop": {
+      "path": "desktop",
+      "description": "Use for the Tauri desktop app (React/TypeScript + Rust) - companion GUI with event log, notifications, and sound alerts"
+    }
+  },
+  "command": {
+    "build-cli": {
+      "description": "Build the pingo CLI TypeScript source",
+      "agent": "build",
+      "template": "cd cli && npm run build"
+    },
+    "build-desktop": {
+      "description": "Build the Tauri desktop app frontend",
+      "agent": "build",
+      "template": "cd desktop && npm run build"
+    },
+    "dev-desktop": {
+      "description": "Start the desktop app in dev mode (Vite + Tauri)",
+      "agent": "build",
+      "template": "cd desktop && npm run tauri dev"
+    }
+  }
+}

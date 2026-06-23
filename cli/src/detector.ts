@@ -18,15 +18,32 @@ export interface DetectionResult {
   line: string;
 }
 
-// Matches ANSI escape / color / cursor sequences so detection runs on the
-// raw text an agent prints rather than its terminal control codes.
-// (ESC = , CSI = .)
-// eslint-disable-next-line no-control-regex
-const ANSI_REGEX =
-  /[][[\]()#;?]*(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]*)*)?|(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-ntqry=><~])/g;
+// Control bytes are built from char codes so there are no literal control
+// characters in the source (which are fragile to edit/round-trip).
+const ESC = String.fromCharCode(0x1b); // 
+const BEL = String.fromCharCode(0x07); // 
+const CSI = String.fromCharCode(0x9b); // 
+
+// OSC sequences: ESC ] <arbitrary text> (BEL | ST). PTYs use these to set the
+// window title etc.; the text can contain spaces/backslashes, so this is a
+// dedicated matcher rather than relying on the CSI regex below.
+const OSC_REGEX = new RegExp(
+  ESC + "\\][\\s\\S]*?(?:" + BEL + "|" + ESC + "\\\\)",
+  "g"
+);
+
+// CSI / SGR color / cursor escape sequences: ESC/CSI [ ... <final byte>.
+const ANSI_REGEX = new RegExp(
+  "[" +
+    ESC +
+    CSI +
+    "][[\\]()#;?]*(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-ntqry=><~]",
+  "g"
+);
 
 export function stripAnsi(input: string): string {
-  return input.replace(ANSI_REGEX, "");
+  // Strip OSC (window-title etc.) sequences first, then CSI/color/cursor codes.
+  return input.replace(OSC_REGEX, "").replace(ANSI_REGEX, "");
 }
 
 // Fallback rules used when the desktop app is not reachable. These mirror the
@@ -87,12 +104,32 @@ export const DEFAULT_RULES: Rule[] = [
     patterns: ["error", "fatal", "crashed", "failed", "exception"],
   },
   {
+    id: "default-input",
+    name: "Waiting for Input",
+    category: "input",
+    priority: "medium",
+    enabled: true,
+    patterns: [
+      "how can i help",
+      "what would you like",
+      "select an option",
+      "choose an",
+      "enter your",
+      "proceed?",
+      "could you clarify",
+      "are you asking about",
+      "permission for",
+      "i need more information",
+      "please clarify",
+    ],
+  },
+  {
     id: "default-ratelimit",
     name: "Rate Limit",
     category: "ratelimit",
     priority: "high",
     enabled: true,
-    patterns: ["rate limit", "quota exceeded", "too many requests", "429"],
+    patterns: ["rate limit", "quota exceeded", "too many requests", "session limit", "429"],
   },
 ];
 
