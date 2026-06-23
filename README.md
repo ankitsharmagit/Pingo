@@ -7,7 +7,7 @@
 ╚═╝     ╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ 
 ```
 
-**Never babysit coding agents again.**
+## ⏳ Never babysit coding agents again.
 
 Pingo alerts you when Claude Code, OpenCode, Codex, Gemini CLI, Cursor, or Aider need your attention — with voice, sound, or desktop notifications. Fully local, open source, works in seconds.
 
