@@ -143,6 +143,8 @@ jobs:
           echo "| \`desktop-windows-nsis/*.exe\` | Windows NSIS Installer |" >> release-notes.md
           echo "| \`desktop-macos/*.dmg\` | macOS Disk Image |" >> release-notes.md
           echo "| \`desktop-linux/*.AppImage\` | Linux AppImage |" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "> **Windows SmartScreen**: Since Pingo is not yet code-signed, Windows may show a SmartScreen warning. Click **More info** → **Run anyway** to proceed. Pingo is open source and the source code is available for inspection." >> release-notes.md
 
       - uses: softprops/action-gh-release@v2
         with:
