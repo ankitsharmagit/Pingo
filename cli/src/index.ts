@@ -575,15 +575,15 @@ function main(): void {
   }
   function speakPhrase(category: string): void {
     const map: Record<string, string> = {
-      permission: "Permission required",
-      success: "Task completed",
-      error: "Agent error",
-      authentication: "Authentication required",
-      ratelimit: "Rate limit reached",
-      input: "Waiting for input",
+      permission: `${agent} needs permission`,
+      success: `${agent} completed a task`,
+      error: `${agent} hit an error`,
+      authentication: `${agent} needs authentication`,
+      ratelimit: `${agent} hit a rate limit`,
+      input: `${agent} is waiting for input`,
     };
     if (voiceQueue.length >= MAX_QUEUE) voiceQueue.shift();
-    voiceQueue.push(map[category] ?? "Notification");
+    voiceQueue.push(map[category] ?? `${agent} needs attention`);
     speakQueued();
   }
 
