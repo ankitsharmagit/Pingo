@@ -1,0 +1,26 @@
+{
+  "name": "pingo",
+  "version": "1.0.0",
+  "description": "Pingo CLI process wrapper",
+  "main": "dist/index.js",
+  "bin": {
+    "pingo": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 0"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "cross-spawn": "^7.0.3",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
+    "@types/node": "^20.11.24",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3"
+  }
+}

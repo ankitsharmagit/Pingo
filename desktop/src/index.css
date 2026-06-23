@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: #0a0a0f;
+  --color-bg-panel: rgba(255, 255, 255, 0.04);
+  --color-bg-panel-strong: rgba(255, 255, 255, 0.07);
+  --color-border-soft: rgba(255, 255, 255, 0.08);
+
+  --color-accent: #7c6cff;
+  --color-accent-2: #4cc9f0;
+
+  --color-prio-high: #ff5d73;
+  --color-prio-medium: #ffb347;
+  --color-prio-low: #5ad19a;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(124, 108, 255, 0.18), transparent 60%),
+    radial-gradient(1000px 500px at 110% 10%, rgba(76, 201, 240, 0.14), transparent 55%),
+    var(--color-bg-base);
+  color: #e8e8f0;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Reusable glassmorphism panel */
+.glass {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border-soft);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* Scrollbar styling */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(124, 108, 255, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(124, 108, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(124, 108, 255, 0);
+  }
+}
+.live-dot {
+  animation: pulse-ring 2s infinite;
+}
+
+@keyframes flash-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.flash-in {
+  animation: flash-in 0.25s ease-out;
+}
