@@ -5,32 +5,67 @@ and get notified when they finish, need approval, hit errors, or need
 authentication — with native OS notifications and sounds. Fully local, no OCR,
 no cloud, agent-agnostic.
 
-## Quick start
+## Installation
+
+### Prerequisites
+
+- **Node.js** v18 or later ([download](https://nodejs.org))
+
+### Install the CLI
 
 ```bash
 npm install -g pingo
 ```
 
-Then run any agent through Pingo:
+Verify it works:
 
 ```bash
-pingo claude        # monitor Claude Code
-pingo opencode      # monitor OpenCode
-pingo aider         # monitor Aider
-pingo gemini        # monitor Gemini CLI
+pingo --version
 ```
 
-You'll hear notification sounds and see alerts in your terminal. For rich
-dashboard, tray icon, and event history, also run the **desktop app**.
-
-### Desktop app
+### Desktop app (optional)
 
 Download the latest installer from the
-[Releases](https://github.com/anomalyco/AgentBell/releases) page (Windows .exe
-/ macOS .dmg / Linux .AppImage). Launch it and it auto-connects to your CLI
-wrapper.
+[Releases](https://github.com/anomalyco/AgentBell/releases) page:
 
-> No git clone, no npm link, no build step needed.
+| Platform | Installer |
+| -------- | --------- |
+| Windows  | `Pingo_*.msi` or `Pingo_*_Setup.exe` |
+| macOS    | `Pingo_*.dmg` |
+| Linux    | `Pingo_*.AppImage` |
+
+Launch the app — it auto-connects to your CLI wrapper. No configuration needed.
+
+> No git clone, no npm link, no build step required.
+
+## Usage
+
+Run any AI agent through Pingo:
+
+```bash
+pingo claude          # monitor Claude Code
+pingo opencode        # monitor OpenCode
+pingo aider           # monitor Aider
+pingo gemini          # monitor Gemini CLI
+pingo codex           # monitor Codex CLI
+```
+
+Pingo wraps the agent, passes all I/O through to your terminal, and analyzes
+every line for events. You'll hear notification sounds and see alerts
+immediately.
+
+### Without the desktop app
+
+Notifications work using your system sounds and text-to-speech. Configure them:
+
+```bash
+pingo setup
+```
+
+### With the desktop app
+
+Keep the desktop app running in the background for a rich dashboard, tray
+icon, event history, and custom sounds per event category.
 
 ## Commands
 
