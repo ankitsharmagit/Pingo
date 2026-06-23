@@ -13,6 +13,7 @@ export interface Rule {
   priority: string; // "high" | "medium" | "low"
   enabled: boolean;
   patterns: string[];
+  negative_patterns?: string[]; // if any match, rule is skipped
   agents?: string[]; // if set, only applies to these agents (empty = all)
 }
 

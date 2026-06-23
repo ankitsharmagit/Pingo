@@ -8,6 +8,7 @@ export interface Rule {
   priority: string; // "high" | "medium" | "low"
   enabled: boolean;
   patterns: string[];
+  negative_patterns?: string[]; // if any match, rule is skipped
   agents?: string[]; // if set, only applies to these agents
 }
 
@@ -66,6 +67,7 @@ export const DEFAULT_RULES: Rule[] = [
       "press enter to continue",
       "waiting for approval",
     ],
+    negative_patterns: ["approved", "already approved", "automatically approved"],
   },
   {
     id: "default-success",
@@ -81,6 +83,14 @@ export const DEFAULT_RULES: Rule[] = [
       "task complete",
       "all changes applied",
     ],
+    negative_patterns: [
+      "not completed",
+      "not finished",
+      "incomplete",
+      "not done",
+      "unfinished",
+      "in progress",
+    ],
   },
   {
     id: "default-authentication",
@@ -95,6 +105,7 @@ export const DEFAULT_RULES: Rule[] = [
       "invalid api key",
       "unauthorized",
     ],
+    negative_patterns: ["login successful", "authenticated", "token refreshed"],
   },
   {
     id: "default-error",
@@ -103,6 +114,19 @@ export const DEFAULT_RULES: Rule[] = [
     priority: "high",
     enabled: true,
     patterns: ["error", "fatal", "crashed", "failed", "exception"],
+    negative_patterns: [
+      "no error",
+      "no errors",
+      "without error",
+      "error free",
+      "error handling",
+      "error message",
+      "error code",
+      "0 errors",
+      "1 error found",
+      "no failures",
+      "passed",
+    ],
   },
   {
     id: "default-input",
@@ -128,6 +152,7 @@ export const DEFAULT_RULES: Rule[] = [
       "i need more information",
       "please clarify",
     ],
+    negative_patterns: [],
   },
   {
     id: "default-ratelimit",
@@ -136,10 +161,31 @@ export const DEFAULT_RULES: Rule[] = [
     priority: "high",
     enabled: true,
     patterns: ["rate limit", "quota exceeded", "too many requests", "session limit", "429"],
+    negative_patterns: ["rate limit remaining", "quota remaining"],
   },
 ];
 
 const PRIORITY_WEIGHT: Record<string, number> = { high: 3, medium: 2, low: 1 };
+
+function needsWordBoundary(pattern: string): boolean {
+  // Single words (no spaces, no punctuation) benefit from \b boundary
+  return /^[a-z]+$/.test(pattern) && pattern.length > 1;
+}
+
+function compilePattern(pattern: string): RegExp | null {
+  const trimmed = pattern.toLowerCase().trim();
+  if (!trimmed) return null;
+  if (needsWordBoundary(trimmed)) {
+    return new RegExp("\\b" + trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
+  }
+  return null;
+}
+
+function matches(text: string, pattern: string): boolean {
+  const regex = compilePattern(pattern);
+  if (regex) return regex.test(text);
+  return text.toLowerCase().includes(pattern.toLowerCase().trim());
+}
 
 export class Detector {
   private rules: Rule[] = DEFAULT_RULES;
@@ -178,6 +224,14 @@ export class Detector {
     return false;
   }
 
+  private isNegated(line: string, rule: Rule): boolean {
+    if (!rule.negative_patterns || rule.negative_patterns.length === 0) return false;
+    for (const np of rule.negative_patterns) {
+      if (matches(line, np)) return true;
+    }
+    return false;
+  }
+
   // Returns the highest-priority matching rule for a single line of output,
   // or null if nothing matches.
   detect(rawLine: string): DetectionResult | null {
@@ -187,9 +241,9 @@ export class Detector {
     if (this.isIgnored(clean)) return null;
 
     for (const rule of this.activeRules()) {
+      if (this.isNegated(clean, rule)) continue;
       for (const pattern of rule.patterns) {
-        const needle = pattern.toLowerCase().trim();
-        if (needle && haystack.includes(needle)) {
+        if (matches(clean, pattern)) {
           return {
             category: rule.category,
             priority: rule.priority,

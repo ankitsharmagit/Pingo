@@ -37,14 +37,19 @@ function RuleEditor({
   const saveRule = useStore((s) => s.saveRule);
   const [draft, setDraft] = useState<Rule>({ ...rule, patterns: [...rule.patterns] });
   const [patternsText, setPatternsText] = useState(rule.patterns.join("\n"));
+  const [negativeText, setNegativeText] = useState((rule.negative_patterns ?? []).join("\n"));
 
   const save = async () => {
     const patterns = patternsText
       .split("\n")
       .map((p) => p.trim())
       .filter(Boolean);
+    const negative_patterns = negativeText
+      .split("\n")
+      .map((p) => p.trim())
+      .filter(Boolean);
     if (!draft.name.trim() || patterns.length === 0) return;
-    await saveRule({ ...draft, patterns });
+    await saveRule({ ...draft, patterns, negative_patterns: negative_patterns.length > 0 ? negative_patterns : undefined });
     onClose();
   };
 
@@ -133,13 +138,24 @@ function RuleEditor({
         </div>
 
         <label className="block text-xs text-white/50 mb-1">
-          Patterns (one per line, case-insensitive substring match)
+          Match patterns (one per line, case-insensitive)
         </label>
         <textarea
           value={patternsText}
           onChange={(e) => setPatternsText(e.target.value)}
-          rows={6}
+          rows={5}
           placeholder={"waiting for approval\npress enter to continue"}
+          className="w-full mb-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10 focus:border-[var(--color-accent)] outline-none text-sm font-mono resize-none"
+        />
+
+        <label className="block text-xs text-white/50 mb-1">
+          Negative patterns (if any match, rule is skipped)
+        </label>
+        <textarea
+          value={negativeText}
+          onChange={(e) => setNegativeText(e.target.value)}
+          rows={3}
+          placeholder={"already approved\nnot completed"}
           className="w-full mb-4 px-3 py-2 rounded-lg bg-white/5 border border-white/10 focus:border-[var(--color-accent)] outline-none text-sm font-mono resize-none"
         />
 
