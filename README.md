@@ -36,6 +36,8 @@ Download the latest installer from the
 
 Launch the app — it auto-connects to your CLI wrapper. No configuration needed.
 
+![Pingo Dashboard](docs/screenshot.png)
+
 > **Windows SmartScreen**: Since Pingo is not yet code-signed, Windows may
 > show a SmartScreen warning. Click **More info** → **Run anyway** to proceed.
 > Pingo is open source and the source code is available for inspection.
