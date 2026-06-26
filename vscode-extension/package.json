@@ -1,9 +1,9 @@
 {
-  "name": "pingo-vscode",
-  "displayName": "Pingo",
+  "name": "pingo-agent-alerts",
+  "displayName": "Pingo Agent Alerts",
   "description": "Give your coding agents a voice. Hear, see, and track when Claude Code, OpenCode, Codex, Gemini, or Aider need your attention.",
   "version": "1.0.1",
-  "publisher": "ankitsharmasolo",
+  "publisher": "ankitai",
   "license": "MIT",
   "icon": "media/icon.png",
   "pricing": "Free",

@@ -13,6 +13,7 @@ Pingo hears, sees, and tracks when **Claude Code, OpenCode, Codex, Gemini, or
 Aider** need your attention — with sound, voice, and VS Code notifications.
 Fully local, open source, works in seconds.
 
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue)](https://marketplace.visualstudio.com/items?itemName=ankitai.pingo-vscode)
 [![npm](https://img.shields.io/npm/v/pingo)](https://www.npmjs.com/package/pingo)
 [![License](https://img.shields.io/github/license/ankitsharmagit/Pingo)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/ankitsharmagit/Pingo/pulls)
@@ -67,18 +68,15 @@ from the Command Palette once, then restart your Claude Code session.
 
 ## Use it
 
-Just run any supported agent in the integrated terminal as you always have:
+Just run any supported agent in the integrated terminal as you always have — no
+prefix, no change:
 
 ```bash
-claude
-opencode
-codex
-gemini
-aider
+claude  opencode  codex  gemini  aider
 ```
 
-No prefix, no change. Pingo detects when each one needs you and alerts you the
-moment it does — quietly holding the alert until you've stepped away.
+Pingo detects when each one needs you and alerts you the moment it does, quietly
+holding the alert until you've stepped away.
 
 ## What Pingo detects
 
@@ -134,16 +132,14 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full picture and
 
 ## FAQ
 
-**Do I need to change how I run my agents?** No. Run `claude` / `opencode` /
-`codex` / `gemini` / `aider` exactly as you do today — Pingo detects them
-automatically. (The Claude Code extension panel needs a one-time hook setup.)
+**Do I need to change how I run my agents?** No — run `claude` / `opencode` /
+`codex` / `gemini` / `aider` exactly as you do today. (Claude Code extension
+panel needs a one-time hook setup via `Pingo: Enable Claude Code Integration`.)
 
-**Does Pingo modify my coding agent?** No. It observes terminal output read-only
-and never alters your agent's input or output.
-
-**Does Pingo send my code anywhere?** No. Everything runs locally — detection
-happens inside the extension and any hook traffic stays on `127.0.0.1`. No cloud,
-no telemetry.
+**Does Pingo modify my agents or send my code anywhere?** No and no. Pingo
+observes terminal output read-only and never alters input or output. Everything
+runs locally — detection happens in-extension, hook traffic stays on
+`127.0.0.1`. No cloud, no telemetry.
 
 **Is Pingo open source?** Yes, MIT licensed.
 
