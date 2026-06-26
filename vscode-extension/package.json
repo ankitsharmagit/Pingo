@@ -2,14 +2,16 @@
   "name": "pingo-vscode",
   "displayName": "Pingo",
   "description": "Give your coding agents a voice. Hear, see, and track when Claude Code, OpenCode, Codex, Gemini, or Aider need your attention.",
-  "version": "1.0.0",
-  "publisher": "pingo",
+  "version": "1.0.1",
+  "publisher": "ankitsharmasolo",
   "license": "MIT",
   "icon": "media/icon.png",
+  "pricing": "Free",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.93.0"
   },
   "categories": [
+    "AI",
     "Other"
   ],
   "keywords": [
@@ -23,22 +25,64 @@
     "ai",
     "coding-agent"
   ],
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/ankitsharmagit/Pingo"
   },
+  "homepage": "https://github.com/ankitsharmagit/Pingo#readme",
+  "bugs": {
+    "url": "https://github.com/ankitsharmagit/Pingo/issues"
+  },
+  "qna": "marketplace",
   "activationEvents": [
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewContainers": {
+      "activitybar": [
+        {
+          "id": "pingo",
+          "title": "Pingo",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "pingo": [
+        {
+          "id": "pingo.notifications",
+          "name": "Notifications",
+          "when": "true"
+        }
+      ]
+    },
     "commands": [
       { "command": "pingo.testNotification", "title": "Pingo: Test Notification" },
       { "command": "pingo.testSound", "title": "Pingo: Test Sound" },
       { "command": "pingo.testVoice", "title": "Pingo: Test Voice" },
       { "command": "pingo.showEvents", "title": "Pingo: Show Events" },
-      { "command": "pingo.openSettings", "title": "Pingo: Open Settings" }
+      { "command": "pingo.openSettings", "title": "Pingo: Open Settings" },
+      { "command": "pingo.enableClaudeHooks", "title": "Pingo: Enable Claude Code Integration" },
+      { "command": "pingo.toggleMute", "title": "Pingo: Toggle Mute" },
+      { "command": "pingo.mute", "title": "Pingo: Mute Alerts" },
+      { "command": "pingo.unmute", "title": "Pingo: Unmute Alerts" },
+      { "command": "pingo.rescanTerminals", "title": "Pingo: Re-scan Terminals for Agents" },
+      { "command": "pingo.clearNotifications", "title": "Pingo: Clear Notifications", "icon": "$(clear-all)" }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "pingo.clearNotifications",
+          "when": "view == pingo.notifications",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Pingo",
       "properties": {
@@ -48,15 +92,52 @@
           "default": "both",
           "description": "How Pingo notifies you of agent events: sound, voice, both, or disabled."
         },
-        "pingo.port": {
-          "type": "number",
-          "default": 4001,
-          "description": "Localhost port the Pingo CLI exposes its event server on."
+        "pingo.monitorTerminals": {
+          "type": "boolean",
+          "default": true,
+          "description": "Passively monitor integrated terminals via shell integration so agents (claude, opencode, codex, gemini, aider) are detected automatically — no `pingo` prefix needed."
+        },
+        "pingo.ignorePatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Lines containing any of these substrings are ignored by detection (case-insensitive). Use to silence false positives."
         },
         "pingo.showVscodeNotifications": {
           "type": "boolean",
           "default": true,
-          "description": "Show native VS Code notifications (info/warning/error) for agent events."
+          "description": "Show agent events in the non-modal Pingo activity-bar panel (the visual indicator). When off, events still alert via sound/voice — the panel just stays empty. Pingo never raises modal toast popups for alerts."
+        },
+        "pingo.awaySeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 0,
+          "description": "Only play the alert sound/voice once you've stepped away — i.e. the VS Code window has been unfocused — for at least this many seconds. While you're working in VS Code the alert is held silently (shown as 'armed' in the status bar) and sounds only if you stay away. Set to 0 to always alert instantly."
+        },
+        "pingo.claudeHooks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Host a localhost listener for Claude Code's Notification/Stop hooks, so the Claude Code extension (which bypasses shell integration) is detected. Run 'Pingo: Enable Claude Code Integration' once to register the hooks."
+        },
+        "pingo.hookPort": {
+          "type": "number",
+          "default": 4100,
+          "description": "Localhost port the Claude Code hook listener binds to (must match the URL registered in ~/.claude/settings.json)."
+        },
+        "pingo.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write a diagnostic log (pingo-monitor.log / pingo-hooks.log in your temp dir) capturing reconstructed terminal screens, detections, and hook posts. Use to tune detection rules per agent."
+        },
+        "pingo.useCliFallback": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also listen to the optional `pingo <agent>` CLI over a localhost WebSocket. Only needed for terminals/shells where passive monitoring is unavailable."
+        },
+        "pingo.port": {
+          "type": "number",
+          "default": 4001,
+          "description": "Localhost port the optional Pingo CLI exposes its event server on (used only when 'useCliFallback' is enabled)."
         }
       }
     }
@@ -67,11 +148,13 @@
     "vscode:prepublish": "npm run compile"
   },
   "dependencies": {
+    "@pingo/detector": "*",
     "@pingo/shared": "*",
+    "@xterm/headless": "^5.5.0",
     "ws": "^8.16.0"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.93.0",
     "@types/ws": "^8.5.10",
     "esbuild": "^0.21.0"
   }

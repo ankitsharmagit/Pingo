@@ -9,7 +9,7 @@
 // Both channels are serialized through queues so overlapping events don't
 // talk over each other.
 
-import { exec } from "child_process";
+import { exec, type ChildProcess } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import type { EventType } from "./types";
@@ -66,6 +66,7 @@ const MAX_QUEUE = 16;
 class Channel {
   private queue: string[] = [];
   private busy = false;
+  private child: ChildProcess | null = null;
 
   push(command: string | null): void {
     if (!command) return;
@@ -74,14 +75,35 @@ class Channel {
     this.run();
   }
 
+  // Drop everything queued and kill the currently-playing sound/voice so the
+  // user gets true, instant silence — not "silent after the next few queued
+  // clips finish." This is what makes Toggle Mute a real killswitch.
+  flush(): void {
+    this.queue.length = 0;
+    if (this.child) {
+      try {
+        this.child.kill();
+      } catch {
+        /* ignore */
+      }
+      this.child = null;
+    }
+    this.busy = false;
+  }
+
   private run(): void {
     if (this.busy || this.queue.length === 0) return;
     this.busy = true;
     const command = this.queue.shift()!;
-    exec(command, () => {
+    // Keep the child handle so flush() can kill a sound that's mid-play —
+    // without it, muting would only stop *future* enqueues, not the clip
+    // already playing (and a queued series would keep ringing out).
+    const child = exec(command, () => {
+      this.child = null;
       this.busy = false;
       this.run();
     });
+    this.child = child;
   }
 }
 
@@ -105,6 +127,13 @@ export class Notifier {
   speak(phrase: string): void {
     if (!phrase.trim()) return;
     this.voice.push(speakCommand(phrase));
+  }
+
+  // Stop all sound/voice immediately, including the clip currently playing and
+  // anything queued behind it. Used by the mute toggle / disable paths.
+  flush(): void {
+    this.sound.flush();
+    this.voice.flush();
   }
 }
 

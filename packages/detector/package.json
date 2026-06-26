@@ -1,0 +1,14 @@
+{
+  "name": "@pingo/detector",
+  "version": "1.0.0",
+  "description": "Shared rule-based detection engine for Pingo (CLI + VS Code extension)",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  }
+}

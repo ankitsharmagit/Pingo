@@ -22,39 +22,36 @@ Fully local, open source, works in seconds.
 ## The Problem
 
 You start a coding agent. It works through a task. A few minutes later it needs
-your approval — but you're no longer watching the terminal. The agent sits idle,
-waiting. Time wasted.
+your approval — but you've switched to another window and aren't watching the
+terminal. The agent sits idle, waiting. Time wasted.
 
-Pingo watches your agent for you and calls you back when it needs you.
+Pingo watches your agent for you and calls you back when it needs you — and only
+when you've actually stepped away.
 
 ## How It Works
 
-Pingo has two parts that work together:
-
-- **The CLI** is the engine. It wraps your agent in a real terminal, watches its
-  output, runs detection, and broadcasts structured events over a localhost
-  WebSocket. Run standalone, it plays sound/voice itself.
-- **The VS Code extension** is the presentation layer. It auto-discovers the
-  running CLI and turns its events into sounds, voice alerts, native VS Code
-  notifications, a status bar indicator, and an event history. No terminal
-  parsing, no duplicated detection.
+**Install the VS Code extension and keep using your agents exactly as you do
+today** — no wrapper command, no separate service, no workflow change.
 
 ```
-You start:        pingo claude
-Your agent runs:  [working...]
-Agent needs you:  "Do you want to make this edit?"
-Pingo alerts you: 🔔 Claude Code needs approval   (sound · voice · VS Code)
+You run normally:  opencode        (or claude, codex, gemini, aider)
+Your agent runs:   [working...]
+Agent needs you:   "Do you want to make this edit?"
+You're on Chrome:  🔔 OpenCode needs approval   (sound · voice · VS Code)
+You're working:    🔇 silent — shown as "armed" in the status bar
 ```
+
+- **Terminal agents** are watched passively through VS Code's stable **Shell
+  Integration API**. Pingo reconstructs the agent's full-screen TUI with a
+  headless terminal emulator and runs detection over the rendered screen.
+- **The Claude Code extension panel** runs in its own shell-less terminal, so
+  Pingo listens to **Claude Code's own hooks** instead (one-time setup command).
+- **Away-aware:** alerts stay silent while you're working in VS Code and sound
+  only once you've switched to another window for a configurable interval.
+
+No CLI, no localhost server, and no WebSocket are required for the default path.
 
 ## Install
-
-**1. Install the CLI**
-
-```bash
-npm install -g pingo
-```
-
-**2. Install the VS Code extension**
 
 Search **"Pingo"** in the VS Code Marketplace, or:
 
@@ -62,26 +59,26 @@ Search **"Pingo"** in the VS Code Marketplace, or:
 code --install-extension pingo
 ```
 
-The extension auto-connects to the CLI — no setup. The status bar shows
-**`$(bell) Pingo Connected`** when attached.
+That's it. The status bar shows **`$(bell) Pingo Active`** when Pingo is watching
+your terminals.
 
-> The extension is optional. The CLI plays sound and voice on its own, so
-> `pingo claude` is useful anywhere.
+**Claude Code extension users:** run **`Pingo: Enable Claude Code Integration`**
+from the Command Palette once, then restart your Claude Code session.
 
 ## Use it
 
-Run any supported agent through Pingo:
+Just run any supported agent in the integrated terminal as you always have:
 
 ```bash
-pingo claude
-pingo opencode
-pingo codex
-pingo gemini
-pingo aider
+claude
+opencode
+codex
+gemini
+aider
 ```
 
-Pingo passes all input/output through untouched — your agent behaves exactly as
-before — while alerting you the moment it needs attention.
+No prefix, no change. Pingo detects when each one needs you and alerts you the
+moment it does — quietly holding the alert until you've stepped away.
 
 ## What Pingo detects
 
@@ -93,28 +90,43 @@ before — while alerting you the moment it needs attention.
 | ⚠ Authentication | "login required", "token expired" |
 | ⏳ Rate limit | "rate limit", "quota exceeded", "429" |
 
-## CLI Commands
-
-| Command | What it does |
-|---------|-------------|
-| `pingo <agent>` | Launch and monitor a coding agent |
-| `pingo setup` | Choose notification mode (voice / sound / both / none) |
-| `pingo doctor` | Diagnose your installation and audio |
-| `pingo test` | Send a test notification |
-| `pingo discover` | Scan PATH for installed coding agents |
-| `pingo init` | First-time setup wizard |
-
 ## VS Code Commands
 
-`Pingo: Test Notification` · `Pingo: Test Sound` · `Pingo: Test Voice` ·
-`Pingo: Show Events` · `Pingo: Open Settings`
+`Pingo: Enable Claude Code Integration` · `Pingo: Test Notification` ·
+`Pingo: Test Sound` · `Pingo: Test Voice` · `Pingo: Show Events` ·
+`Pingo: Open Settings`
+
+## Key settings
+
+| Setting | Default | What it does |
+|---------|---------|-------------|
+| `pingo.notify` | `both` | `both` / `sound` / `voice` / `disabled` |
+| `pingo.awaySeconds` | `30` | Seconds the window must be unfocused before alerts sound (`0` = instant) |
+| `pingo.monitorTerminals` | `true` | Passively monitor integrated terminals |
+| `pingo.claudeHooks` | `true` | Host the Claude Code hook listener |
+| `pingo.useCliFallback` | `false` | Also listen to the optional `pingo <agent>` CLI |
+
+## Optional: CLI fallback
+
+For shells/terminals where shell integration isn't available, the standalone
+`pingo <agent>` CLI still works and plays sound/voice on its own:
+
+```bash
+npm install -g pingo
+pingo claude          # or opencode, codex, gemini, aider
+```
+
+Enable `pingo.useCliFallback` to also surface its events in the extension; events
+from both sources are de-duplicated. CLI commands: `pingo <agent>`, `pingo setup`,
+`pingo doctor`, `pingo test`, `pingo discover`, `pingo init`.
 
 ## Repository layout
 
 ```
 packages/shared/    @pingo/shared — event types, WebSocket protocol, notifier
-cli/                pingo — the monitoring engine (PTY + detection + event server)
-vscode-extension/   Pingo for VS Code — the presentation layer
+packages/detector/  @pingo/detector — shared rule-based detection engine
+vscode-extension/   Pingo for VS Code — the primary product (passive monitor + hooks)
+cli/                pingo — optional CLI fallback (PTY + detection + event server)
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full picture and
@@ -122,11 +134,16 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full picture and
 
 ## FAQ
 
-**Does Pingo modify my coding agent?** No. It wraps your agent and passes all I/O
-through untouched.
+**Do I need to change how I run my agents?** No. Run `claude` / `opencode` /
+`codex` / `gemini` / `aider` exactly as you do today — Pingo detects them
+automatically. (The Claude Code extension panel needs a one-time hook setup.)
 
-**Does Pingo send my code anywhere?** No. Everything runs locally — the CLI and
-the extension talk over `127.0.0.1`. No cloud, no telemetry.
+**Does Pingo modify my coding agent?** No. It observes terminal output read-only
+and never alters your agent's input or output.
+
+**Does Pingo send my code anywhere?** No. Everything runs locally — detection
+happens inside the extension and any hook traffic stays on `127.0.0.1`. No cloud,
+no telemetry.
 
 **Is Pingo open source?** Yes, MIT licensed.
 

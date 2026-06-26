@@ -85,15 +85,24 @@ export class CliClient {
     }, RECONNECT_MS);
   }
 
-  // Re-point at a new port (e.g. after the user changes the setting).
+  // Re-point at a new port (e.g. after the user changes the setting). Close
+  // the old socket and reconnect immediately — don't wait the 2s reconnect
+  // delay, which would leave us detached from a running CLI in the meantime.
   setPort(port: number): void {
     if (port === this.port) return;
     this.port = port;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     try {
       this.ws?.close();
     } catch {
       /* ignore */
     }
+    this.ws = null;
+    this.setConnected(false);
+    this.connect();
   }
 
   dispose(): void {
